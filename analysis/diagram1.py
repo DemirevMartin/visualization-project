@@ -2,7 +2,6 @@ import dash
 from dash import dcc, html, Input, Output
 import plotly.graph_objects as go
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
 
 # ------------------------
 # 1. Config / Data Load
@@ -25,27 +24,11 @@ df['availability_status'] = df.apply(
 status_map = {'Sufficient': 0, 'Shortage': 1}
 df['status_id'] = df['availability_status'].map(status_map)
 
-# Normalize Data Globally (0-1)
-# Normalizing once ensures valid comparison across services and time
-metrics = ['patient_satisfaction', 'staff_morale', 'patients_admitted', 'patients_refused']
-labels = ['Satisfaction', 'Staff Morale', 'Admitted', 'Refusals']
-
-scaler = MinMaxScaler()
-df_norm = df.copy()
-df_norm[metrics] = scaler.fit_transform(df[metrics])
-
-# List of all unique services for the dropdown
-all_services = sorted(df['service'].unique())
-
-# ------------------------
-# 3. Dash
-# ------------------------
-app = dash.Dash(__name__)
-
-# Blue for Sufficient, Red for Shortage
+# Distinct Colors for the lines
+# Blue for Good, Red for Bad
 COLORS = ['#1f77b4', '#d62728'] 
 
-# Create Discrete Colorscale for ParCoords
+# Create Discrete Colorscale
 COLORSCALE = [
     [0.0, COLORS[0]],
     [0.5, COLORS[0]],
@@ -53,8 +36,28 @@ COLORSCALE = [
     [1.0, COLORS[1]]
 ]
 
+# METRICS CONFIGURATION
+# We do NOT normalize. We define specific ranges for the axes to make them comparable.
+metrics_config = [
+    {'col': 'patient_satisfaction', 'label': 'Satisfaction', 'range': [0, 100]}, # Fixed 0-100 score
+    {'col': 'staff_morale',         'label': 'Staff Morale', 'range': [0, 100]}, # Fixed 0-100 score
+    {'col': 'patients_admitted',    'label': 'Admitted',     'range': [0, df['patients_admitted'].max()]}, # 0 to Max
+    {'col': 'patients_refused',     'label': 'Refusals',     'range': [0, df['patients_refused'].max()]}   # 0 to Max
+]
+
+# List of all unique services for the dropdown
+all_services = sorted(df['service'].unique())
+
+# ------------------------
+# 3. Dash App Initialization
+# ------------------------
+app = dash.Dash(__name__)
+
+# ------------------------
+# 4. App Layout
+# ------------------------
 app.layout = html.Div([
-    html.H1("Task 1: Bed Capacity & Service Performance Analysis", 
+    html.H1("Task 1: Bed Capacity & Service Performance (Raw Values)", 
             style={'textAlign': 'center', 'fontFamily': 'Arial, sans-serif', 'marginBottom': '30px'}),
     
     # --- Controls Container ---
@@ -78,7 +81,7 @@ app.layout = html.Div([
             dcc.Dropdown(
                 id='service-filter',
                 options=[{'label': s.replace('_', ' ').title(), 'value': s} for s in all_services],
-                value=all_services, # Default to showing all
+                value=all_services,
                 multi=True,
                 clearable=False
             ),
@@ -100,26 +103,34 @@ app.layout = html.Div([
 )
 def update_graphs(week_range, selected_services):
     if not selected_services:
-        return html.Div("Please select at least one service.", style={'padding': '20px', 'fontSize': '18px'})
+        return html.Div("Please select at least one service.", style={'padding': '20px'})
 
     start_week, end_week = week_range
     
-    # Filter data by week
-    mask = (df_norm['week'] >= start_week) & (df_norm['week'] <= end_week)
-    filtered_df = df_norm[mask]
+    # Filter by Week
+    mask = (df['week'] >= start_week) & (df['week'] <= end_week)
+    filtered_df = df[mask]
     
     graphs = []
     
-    # Iterate only through the SELECTED services
     for service in sorted(selected_services):
-        # Get subset for this service
         subset = filtered_df[filtered_df['service'] == service]
         
-        # If no data for this service in the selected range, skip
         if subset.empty:
             continue
             
         # Create Parallel Coordinates Figure
+        # We assume 'range' in dimensions to keep the axes consistent across services
+        # e.g., if ICU has max 20 admissions and Emergency has 100, we want them to use the same scale?
+        # OPTION A: Global Scale (Good for comparison) -> Uses the ranges defined in metrics_config
+        # OPTION B: Local Scale (Good for seeing trend within service) -> Uses subset.max()
+        
+        # Here we use GLOBAL SCALE (from metrics_config) so you can compare magnitudes
+        dimensions = [
+            dict(range=conf['range'], label=conf['label'], values=subset[conf['col']]) 
+            for conf in metrics_config
+        ]
+
         fig = go.Figure(data=go.Parcoords(
             line=dict(
                 color=subset['status_id'],
@@ -135,9 +146,7 @@ def update_graphs(week_range, selected_services):
                     thickness=15
                 )
             ),
-            dimensions=[
-                dict(range=[0,1], label=l, values=subset[m]) for m, l in zip(metrics, labels)
-            ]
+            dimensions=dimensions
         ))
         
         fig.update_layout(
@@ -146,10 +155,9 @@ def update_graphs(week_range, selected_services):
             margin=dict(l=50, r=50, t=60, b=20)
         )
         
-        # Add to graph list
         graphs.append(html.Div(
             dcc.Graph(figure=fig),
-            style={'width': '48%', 'minWidth': '600px', 'padding': '10px', 'boxSizing': 'border-box'}
+            style={'width': '48%', 'minWidth': '600px', 'padding': '10px'}
         ))
     
     return graphs
