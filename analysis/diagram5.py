@@ -14,17 +14,11 @@ CSV_PATH = "./data/services_weekly.csv"
 df = pd.read_csv(CSV_PATH)
 
 # ------------------------
-# 2. Feature Engineering (Strict "Rates & States")
+# 2. Features
 # ------------------------
-# 1. Occupancy Rate (Pressure)
+# Occupancy Rate
 df['occupancy_rate'] = df.apply(
     lambda x: (x['patients_admitted'] / x['available_beds']) * 100 if x['available_beds'] > 0 else 0, 
-    axis=1
-)
-
-# 2. Refusal Rate (Overflow)
-df['refusal_rate'] = df.apply(
-    lambda x: (x['patients_refused'] / x['patients_request']) * 100 if x['patients_request'] > 0 else 0, 
     axis=1
 )
 
@@ -37,7 +31,7 @@ app = dash.Dash(__name__)
 # 4. App Layout
 # ------------------------
 app.layout = html.Div([
-    html.H1("Task 5: Strategic Operational Clustering (Complete View)", 
+    html.H1("Strategic Operational Clustering (Complete View)", 
             style={'textAlign': 'center', 'fontFamily': 'Arial, sans-serif'}),
     
     html.P("Identify operational patterns. Cluster 0 = Lowest Stress, Cluster K = Highest Stress.",

@@ -119,13 +119,6 @@ def update_graphs(week_range, selected_services):
         if subset.empty:
             continue
             
-        # Create Parallel Coordinates Figure
-        # We assume 'range' in dimensions to keep the axes consistent across services
-        # e.g., if ICU has max 20 admissions and Emergency has 100, we want them to use the same scale?
-        # OPTION A: Global Scale (Good for comparison) -> Uses the ranges defined in metrics_config
-        # OPTION B: Local Scale (Good for seeing trend within service) -> Uses subset.max()
-        
-        # Here we use GLOBAL SCALE (from metrics_config) so you can compare magnitudes
         dimensions = [
             dict(range=conf['range'], label=conf['label'], values=subset[conf['col']]) 
             for conf in metrics_config
