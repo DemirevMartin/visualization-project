@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 # ------------------------
 # 1. Config / Data Load
 # ------------------------
-CSV_PATH = "./data/services_weekly.csv"
+CSV_PATH = "../data/services_weekly.csv"
 
 df = pd.read_csv(CSV_PATH)
 

@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 # ------------------------
 # Config / Data load
 # ------------------------
-CSV_PATH = "./data/services_weekly.csv"  # adjust if needed
+CSV_PATH = "../data/services_weekly.csv"  # adjust if needed
 
 df = pd.read_csv(CSV_PATH)
 

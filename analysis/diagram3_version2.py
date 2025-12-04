@@ -10,10 +10,10 @@ from scipy.stats import pearsonr
 # ------------------------
 # 1. Config / Data Load 
 # ------------------------
-PATIENTS_PATH = "./data/patients.csv"
-SERVICES_PATH = "./data/services_weekly.csv"
-STAFF_PATH = "./data/staff.csv"
-SCHEDULE_PATH = "./data/staff_schedule.csv"
+PATIENTS_PATH = "../data/patients.csv"
+SERVICES_PATH = "../data/services_weekly.csv"
+STAFF_PATH = "../data/staff.csv"
+SCHEDULE_PATH = "../data/staff_schedule.csv"
 
 patients_df = pd.read_csv(PATIENTS_PATH)
 services_df = pd.read_csv(SERVICES_PATH)    

@@ -10,8 +10,8 @@ import plotly.graph_objects as go
 # ------------------------
 # Config / Data load
 # ------------------------
-services_df = pd.read_csv("C:/Users/msmir/Desktop/Uni_TUE/Visualization/VisualizationProject/data/services_weekly.csv")
-staff_schedule_df = pd.read_csv("C:/Users/msmir/Desktop/Uni_TUE/Visualization/VisualizationProject/data/staff_schedule.csv")
+services_df = pd.read_csv("../data/services_weekly.csv")
+staff_schedule_df = pd.read_csv("../data/staff_schedule.csv")
 
 staff_schedule_present_df = staff_schedule_df[staff_schedule_df['present'] == 1]
 
