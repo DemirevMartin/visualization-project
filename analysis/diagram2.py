@@ -19,7 +19,7 @@ if 'month' in df.columns:
 else:
     df['month'] = ((df['week'] - 1) // 4 + 1).clip(1, 12)
 
-numeric_cols = ['patients_admitted', 'patient_satisfaction', 'staff_morale']
+numeric_cols = ['patients_admitted', 'patient_satisfaction', 'staff_morale', 'patients_refused']
 for col in numeric_cols:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -51,7 +51,8 @@ def aggregate_line(df_in, agg='weekly', services=None, events=None):
     grouped = df_f.groupby(['service', time_col]).agg(
         patients_admitted=('patients_admitted', 'sum'),
         patient_satisfaction=('patient_satisfaction', 'mean'),
-        staff_morale=('staff_morale', 'mean')
+        staff_morale=('staff_morale', 'mean'),
+        patients_refused=('patients_refused', 'sum')
     ).reset_index()
 
     return grouped, time_col
@@ -80,7 +81,8 @@ app.layout = html.Div([
             dcc.Dropdown(id='metric', options=[
                 {'label': 'Patients Admitted', 'value': 'patients_admitted'},
                 {'label': 'Patient Satisfaction', 'value': 'patient_satisfaction'},
-                {'label': 'Staff Morale', 'value': 'staff_morale'}
+                {'label': 'Staff Morale', 'value': 'staff_morale'},
+                {'label': 'Patients Refused', 'value': 'patients_refused'}
             ], value=['patients_admitted'], multi=True)
         ], style={'display': 'inline-block', 'width': '30%', 'margin-right': '30px'}),
 
