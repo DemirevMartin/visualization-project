@@ -31,7 +31,7 @@ app = dash.Dash(__name__)
 # 4. App Layout
 # ------------------------
 app.layout = html.Div([
-    html.H1("Strategic Operational Clustering (Complete View)", 
+    html.H1("Strategic Operational Clustering", 
             style={'textAlign': 'center', 'fontFamily': 'Arial, sans-serif'}),
     
     html.P("Identify operational patterns. Cluster 0 = Lowest Stress, Cluster K = Highest Stress.",
@@ -50,21 +50,30 @@ app.layout = html.Div([
 
     # --- Main Dashboard Area ---
     html.Div([
-        # LEFT COLUMN: Bubble Chart (The "State Space")
+        # LEFT COLUMN: Bubble Chart
         html.Div([
-            html.H3("1. Operational State Map", style={'textAlign': 'center', 'fontSize': '16px'}),
+            html.H3("State Space", style={'textAlign': 'center', 'fontSize': '16px'}),
             dcc.Graph(id='bubble-chart')
         ], style={'width': '58%', 'display': 'inline-block', 'verticalAlign': 'top'}),
         
-        # RIGHT COLUMN: Heatmaps (DNA & Timeline)
+        # RIGHT COLUMN: Heatmap and Timeline
         html.Div([
-            html.H3("2. Cluster DNA (Profile)", style={'textAlign': 'center', 'fontSize': '16px'}),
+            html.H3("Cluster DNA", style={'textAlign': 'center', 'fontSize': '16px'}),
             dcc.Graph(id='heatmap-dna', style={'height': '300px'}),
             
-            html.H3("3. Timeline (Patterns)", style={'textAlign': 'center', 'fontSize': '16px', 'marginTop': '20px'}),
+            html.H3("Timeline", style={'textAlign': 'center', 'fontSize': '16px', 'marginTop': '20px'}),
             dcc.Graph(id='heatmap-timeline', style={'height': '350px'})
         ], style={'width': '40%', 'display': 'inline-block', 'verticalAlign': 'top', 'paddingLeft': '2%'})
-    ], style={'width': '95%', 'margin': '0 auto', 'marginTop': '20px'})
+    ], style={'width': '95%', 'margin': '0 auto', 'marginTop': '20px'}),
+
+    # BOTTOM ROW: Drill-down
+    html.Div([
+        html.Hr(),
+        html.H3("Capacity Drill-down: Distinguishing the '100% Clutter'", style={'textAlign': 'center', 'fontSize': '16px'}),
+        html.P("Detailed view of services operating >95% capacity. Separated by service to show satisfaction spread.",
+               style={'textAlign': 'center', 'color': '#777', 'fontSize': '12px'}),
+        dcc.Graph(id='capacity-drilldown', style={'height': '600px'})
+    ], style={'width': '95%', 'margin': '0 auto', 'marginTop': '30px', 'paddingBottom': '50px'})
 ])
 
 # ------------------------
@@ -73,7 +82,8 @@ app.layout = html.Div([
 @app.callback(
     [Output('bubble-chart', 'figure'),
      Output('heatmap-dna', 'figure'),
-     Output('heatmap-timeline', 'figure')],
+     Output('heatmap-timeline', 'figure'),
+     Output('capacity-drilldown', 'figure')],
     [Input('k-slider', 'value')]
 )
 def update_clustering(k):
@@ -120,25 +130,27 @@ def update_clustering(k):
     else:
         colors = ['#2ca02c', "#0e66ff", '#d62728', "#43008b", "#F32ADB"]
 
+    color_map = {str(i): c for i, c in enumerate(colors) if i < len(colors)}
+
     # ----------------------------------------------------
     # 4. Generate Figures
     # ----------------------------------------------------
     
-    # --- FIGURE 1: STRATEGIC BUBBLE CHART (Resurrected) ---
+    # --- FIGURE 1: BUBBLE CHART ---
     fig_bubble = px.scatter(
         df_viz,
         x='occupancy_rate',
         y='patient_satisfaction',
-        size='patients_admitted', # Size = Volume
+        size='patients_admitted',
         color='cluster_label',
         symbol='cluster_label',
-        color_discrete_map={str(i): c for i, c in enumerate(colors) if i < len(colors)},
+        color_discrete_map=color_map,
         category_orders={"cluster_label": [str(i) for i in range(k)]},
-        title="<b>State Space:</b> Strain vs. Quality (Size=Volume)",
+        title="<b>State Space:</b> Stress vs Quality",
         hover_data=['service', 'week', 'staff_morale']
     )
     fig_bubble.update_layout(
-        height=700, # Tall to match the two heatmaps on the right
+        height=700,
         legend_title="Stress Level",
         margin=dict(l=40, r=40, t=40, b=40)
     )
@@ -164,7 +176,7 @@ def update_clustering(k):
         textfont={"size": 12}
     ))
     fig_dna.update_layout(
-        title="<b>Cluster DNA</b> (Red=High Stress)",
+        title="<b>Cluster DNA</b> (Red=High, Blue=Low)",
         height=300,
         margin=dict(l=40, r=40, t=40, b=40),
         yaxis=dict(autorange="reversed")
@@ -173,7 +185,7 @@ def update_clustering(k):
     # --- FIGURE 3: TIMELINE HEATMAP ---
     fig_timeline = px.scatter(
         df_viz, x='week', y='service', color='cluster_label', symbol='cluster_label',
-        color_discrete_map={str(i): c for i, c in enumerate(colors) if i < len(colors)},
+        color_discrete_map=color_map,
         category_orders={"cluster_label": [str(i) for i in range(k)]},
         title="<b>Timeline:</b> Crisis Patterns",
         hover_data=['occupancy_rate']
@@ -183,10 +195,49 @@ def update_clustering(k):
         height=350,
         xaxis_title="Week", 
         yaxis_title="Service",
-        showlegend=False # Legend already on bubble chart
+        showlegend=False
     )
 
-    return fig_bubble, fig_dna, fig_timeline
+    # --- FIGURE 4: CAPACITY DRILL-DOWN ---
+    # Filter for the "Clutter" zone (Occupancy > 95%)
+    df_drill = df_viz[df_viz['occupancy_rate'] >= 95].copy()
+    
+    # Use faceting to create separate rows for each service
+    fig_drill = px.scatter(
+        df_drill,
+        x='patient_satisfaction',
+        y=pd.Series([1]*len(df_drill)), # Dummy Y to align points
+        color='cluster_label',
+        facet_row='service', # Split charts by service
+        color_discrete_map=color_map,
+        category_orders={"cluster_label": [str(i) for i in range(k)]},
+        title="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall",
+        hover_data=['week', 'patients_admitted', 'staff_morale']
+    )
+    
+    # Clean up the layout
+    fig_drill.update_layout(
+        height=600, # Taller to fit facets
+        xaxis_title="Patient Satisfaction",
+        showlegend=False,
+        yaxis={'visible': False, 'showticklabels': False},
+        margin=dict(l=120) # Add left margin for labels
+    )
+    # Remove repetitive Y-axis labels from facets
+    fig_drill.update_yaxes(matches=None, showticklabels=False, visible=False)
+
+    # Add a marker border for distinctness
+    fig_drill.update_traces(marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')))
+    
+    # Clean up facet text (e.g., "service=ICU" -> "ICU") and move to left
+    fig_drill.for_each_annotation(lambda a: a.update(
+        text=a.text.split("=")[-1],
+        x=-0.01,
+        xanchor='right',
+        textangle=-90
+    ))
+
+    return fig_bubble, fig_dna, fig_timeline, fig_drill
 
 # ------------------------
 # 6. Run Server
