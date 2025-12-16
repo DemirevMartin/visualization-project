@@ -135,7 +135,26 @@ app.layout = html.Div([
 
     html.Div(id='d1-container'),
     html.Hr(),
-    html.Div(id='d2-container')
+
+    html.Div(
+    [
+        html.Div(
+            html.Button(
+                "Reset selection",
+                id="reset-selection-btn",
+                n_clicks=0,
+                style={
+                    "marginBottom": "8px",
+                    "padding": "6px 12px",
+                    "fontWeight": "bold"
+                }
+            ),
+            style={"textAlign": "right"}
+        ),
+        html.Div(id='d2-container')
+    ]
+)
+
 ])
 
 # ------------------------
@@ -189,6 +208,8 @@ def capture_rectangle(selected_list):
 
     return {'service': service, 'weeks': sorted(weeks)}
 
+
+
 # ------------------------
 # Diagram 1 — PCP (LINKED)
 # ------------------------
@@ -222,10 +243,17 @@ def update_d1(agg, events, selection):
                 dict(label='Refused', values=sub['patients_refused'])
             ]
         ))
-        fig.update_layout(title=s, height=350)
+        fig.update_layout(title=s, height=450)
         figs.append(dcc.Graph(figure=fig))
 
-    return figs
+    return html.Div(
+        figs,
+        style={
+            'display': 'grid',
+            'gridTemplateColumns': 'repeat(2, 1fr)',
+            'gap': '12px'
+        }
+    )
 
 # ------------------------
 # Diagram 2 — Small multiples
@@ -238,6 +266,16 @@ def update_d1(agg, events, selection):
 )
 def update_d2(agg, events, brushed):
     g, time_col = aggregate_line(df, agg, FIXED_SERVICES, events)
+
+    # Context (flu / donation / strike / none) per service & time
+    context_map = (
+    df[['service', time_col, 'event']]
+    .drop_duplicates(subset=['service', time_col])
+)
+
+    # --- FIXED X-AXIS RANGE (global) ---
+    x_min = g[time_col].min()
+    x_max = g[time_col].max()
 
     selected = set(brushed or [])
     is_brushed = bool(selected)
@@ -262,7 +300,8 @@ def update_d2(agg, events, brushed):
         fig.update_layout(
             title=s,
             dragmode='select',
-            clickmode='event+select'
+            clickmode='event+select',
+            xaxis=dict(range=[x_min, x_max])
         )
 
         charts.append(dcc.Graph(
@@ -271,6 +310,20 @@ def update_d2(agg, events, brushed):
         ))
 
     return charts
+# ------------------------
+# Reset button: clear metric & rectangle selections
+# ------------------------
+@app.callback(
+    Output('global-metric-brush', 'data', allow_duplicate=True),
+    Output('d2-time-selection', 'data', allow_duplicate=True),
+    Input('reset-selection-btn', 'n_clicks'),
+    prevent_initial_call=True
+)
+
+def reset_all_selections(n_clicks):
+    if n_clicks:
+        return [], None
+    return dash.no_update, dash.no_update
 
 # ------------------------
 # Run
