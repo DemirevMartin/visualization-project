@@ -1,13 +1,11 @@
 # diagram1_2_combined.py
 # -------------------------------------------------------
-# Diagram 1: Parcoords (unchanged)
-# Diagram 2: Small multiples with METRIC-BASED BRUSHING
+# Diagram 1: Parcoords (PCP)
+# Diagram 2: Small multiples with METRIC + TIME brushing
 # -------------------------------------------------------
 
-import math
 import pandas as pd
 import numpy as np
-
 import dash
 from dash import dcc, html, Input, Output, State
 import plotly.graph_objects as go
@@ -83,7 +81,7 @@ def aggregate_line(df_in, agg, services, events):
     return g, time_col
 
 # ------------------------
-# FIXED METRIC ORDER (IMPORTANT)
+# Fixed metric order
 # ------------------------
 METRICS = [
     'patients_admitted',
@@ -109,12 +107,12 @@ all_events = sorted(df['event'].dropna().unique())
 
 app.layout = html.Div([
 
-    html.H2("Combined Dashboard — Metric Brushing in Diagram 2", style={'textAlign': 'center'}),
+    html.H2("Linked Dashboard — Metric & Time Brushing"),
 
     dcc.Store(id='global-metric-brush', data=[]),
+    dcc.Store(id='d2-time-selection', data=None),
 
     html.Div([
-        html.Label("Time Granularity"),
         dcc.RadioItems(
             id='time-granularity',
             options=[
@@ -125,33 +123,23 @@ app.layout = html.Div([
             value='weekly',
             inline=True
         ),
-        html.Br(),
-        html.Label("Event Filter"),
         dcc.Dropdown(
             id='event-filter',
             options=[{'label': e, 'value': e} for e in all_events],
             value=all_events,
             multi=True
         )
-    ], style={'width': '90%', 'margin': 'auto'}),
-
-    html.Hr(),
-
-    html.Div([
-        html.H3("Diagram 1 — Parcoords"),
-        html.Div(id='d1-container')
     ]),
 
     html.Hr(),
 
-    html.Div([
-        html.H3("Diagram 2 — Small Multiples (Metric Brushing)"),
-        html.Div(id='d2-container')
-    ])
+    html.Div(id='d1-container'),
+    html.Hr(),
+    html.Div(id='d2-container')
 ])
 
 # ------------------------
-# ✅ FIXED METRIC BRUSH CALLBACK
+# Metric brushing (UNCHANGED)
 # ------------------------
 @app.callback(
     Output('global-metric-brush', 'data'),
@@ -160,55 +148,73 @@ app.layout = html.Div([
     prevent_initial_call=True
 )
 def update_metric_brush(click_list, stored):
-
     if not isinstance(stored, list):
         stored = []
 
-    if not click_list:
-        return stored
-
-    for click in click_list:
-        if click and "points" in click:
-            point = click["points"][0]
-
-            curve_idx = point.get("curveNumber", None)
-            if curve_idx is None or curve_idx >= len(METRIC_LABELS):
-                continue
-
-            metric = METRIC_LABELS[curve_idx]
-
-            # TOGGLE
-            if metric in stored:
-                stored.remove(metric)
-            else:
-                stored.append(metric)
-            break
-
+    for click in click_list or []:
+        if click and 'points' in click:
+            idx = click['points'][0].get('curveNumber')
+            if idx is not None and idx < len(METRIC_LABELS):
+                metric = METRIC_LABELS[idx]
+                if metric in stored:
+                    stored.remove(metric)
+                else:
+                    stored.append(metric)
+                break
     return stored
 
 # ------------------------
-# Diagram 1 (unchanged)
+# Rectangle time brushing (NEW)
+# ------------------------
+@app.callback(
+    Output('d2-time-selection', 'data'),
+    Input({'type': 'd2-chart', 'index': dash.ALL}, 'selectedData'),
+    prevent_initial_call=True
+)
+def capture_rectangle(selected_list):
+    if not selected_list:
+        return None
+
+    weeks, service = set(), None
+    for sel in selected_list:
+        if sel and 'points' in sel:
+            for p in sel['points']:
+                if 'x' in p:
+                    weeks.add(int(p['x']))
+                if 'customdata' in p:
+                    service = p['customdata']
+
+    if not weeks or not service:
+        return None
+
+    return {'service': service, 'weeks': sorted(weeks)}
+
+# ------------------------
+# Diagram 1 — PCP (LINKED)
 # ------------------------
 @app.callback(
     Output('d1-container', 'children'),
     Input('time-granularity', 'value'),
-    Input('event-filter', 'value')
+    Input('event-filter', 'value'),
+    Input('d2-time-selection', 'data')
 )
-def update_d1(agg, events):
-    g, _ = aggregate_line(df, agg, FIXED_SERVICES, events)
-    figs = []
+def update_d1(agg, events, selection):
+    g, time_col = aggregate_line(df, agg, FIXED_SERVICES, events)
 
+    if selection:
+        g = g[
+            (g['service'] == selection['service']) &
+            (g[time_col].isin(selection['weeks']))
+        ]
+
+    figs = []
     for s in FIXED_SERVICES:
         sub = g[g['service'] == s]
         if sub.empty:
             continue
 
         fig = go.Figure(go.Parcoords(
-            line=dict(
-                color=sub['status_id'],
-                colorscale=COLORSCALE,
-                cmin=0, cmax=1
-            ),
+            line=dict(color=sub['status_id'], colorscale=COLORSCALE),
             dimensions=[
                 dict(label='Satisfaction', values=sub['patient_satisfaction']),
                 dict(label='Staff Morale', values=sub['staff_morale']),
@@ -216,15 +222,13 @@ def update_d1(agg, events):
                 dict(label='Refused', values=sub['patients_refused'])
             ]
         ))
-
         fig.update_layout(title=s, height=350)
-        figs.append(html.Div(dcc.Graph(figure=fig),
-                             style={'width': '48%', 'display': 'inline-block'}))
+        figs.append(dcc.Graph(figure=fig))
 
     return figs
 
 # ------------------------
-# Diagram 2 — METRIC BRUSHING
+# Diagram 2 — Small multiples
 # ------------------------
 @app.callback(
     Output('d2-container', 'children'),
@@ -232,13 +236,11 @@ def update_d1(agg, events):
     Input('event-filter', 'value'),
     Input('global-metric-brush', 'data')
 )
-def update_d2(agg, events, brushed_metrics):
-
+def update_d2(agg, events, brushed):
     g, time_col = aggregate_line(df, agg, FIXED_SERVICES, events)
 
-    selected = set(brushed_metrics or [])
+    selected = set(brushed or [])
     is_brushed = bool(selected)
-
     charts = []
 
     for s in sorted(g['service'].unique()):
@@ -246,34 +248,26 @@ def update_d2(agg, events, brushed_metrics):
         fig = go.Figure()
 
         for m, label in zip(METRICS, METRIC_LABELS):
-            is_selected = label in selected
-
-            if is_brushed:
-                opacity = 1.0 if is_selected else 0.15
-                width = 4 if is_selected else 2
-            else:
-                opacity, width = 1.0, 2
-
+            sel = label in selected
             fig.add_trace(go.Scatter(
                 x=sub[time_col],
                 y=sub[m],
-                mode='lines+markers',
                 name=label,
-                line=dict(width=width),
-                opacity=opacity
+                mode='lines+markers',
+                customdata=[s] * len(sub),
+                opacity=1.0 if (not is_brushed or sel) else 0.15,
+                line=dict(width=4 if sel else 2)
             ))
 
         fig.update_layout(
             title=s,
-            height=280,
-            margin=dict(l=40, r=10, t=40, b=40),
-            xaxis_title=time_col.title(),
+            dragmode='select',
             clickmode='event+select'
         )
 
-        charts.append(html.Div(
-            dcc.Graph(id={'type': 'd2-chart', 'index': s}, figure=fig),
-            style={'border': '1px solid #ddd', 'marginBottom': '10px'}
+        charts.append(dcc.Graph(
+            id={'type': 'd2-chart', 'index': s},
+            figure=fig
         ))
 
     return charts
