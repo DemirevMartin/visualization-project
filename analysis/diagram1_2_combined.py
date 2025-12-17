@@ -111,6 +111,8 @@ app.layout = html.Div([
 
     dcc.Store(id='global-metric-brush', data=[]),
     dcc.Store(id='d2-time-selection', data=None),
+    dcc.Store(id='pcp-brush-store', data={}),
+
 
     html.Div([
         dcc.RadioItems(
@@ -208,6 +210,27 @@ def capture_rectangle(selected_list):
 
     return {'service': service, 'weeks': sorted(weeks)}
 
+@app.callback(
+    Output('pcp-brush-store', 'data'),
+    Input({'type': 'pcp-chart', 'index': dash.ALL}, 'restyleData'),
+    State('pcp-brush-store', 'data'),
+    prevent_initial_call=True
+)
+def capture_pcp_brush(restyle_list, stored):
+    if not stored:
+        stored = {}
+
+    for restyle in restyle_list or []:
+        if not restyle:
+            continue
+
+        changes = restyle[0]   # what changed
+        for k, v in changes.items():
+            # Example key: "dimensions[1].constraintrange"
+            if "constraintrange" in k:
+                stored[k] = v
+
+    return stored
 
 
 # ------------------------
@@ -217,11 +240,14 @@ def capture_rectangle(selected_list):
     Output('d1-container', 'children'),
     Input('time-granularity', 'value'),
     Input('event-filter', 'value'),
-    Input('d2-time-selection', 'data')
+    Input('d2-time-selection', 'data'),
+    Input('pcp-brush-store', 'data')   # ← ADD
 )
-def update_d1(agg, events, selection):
+def update_d1(agg, events, selection, pcp_brush):
+
     g, time_col = aggregate_line(df, agg, FIXED_SERVICES, events)
 
+    # Existing rectangle time brushing logic (UNCHANGED)
     if selection:
         g = g[
             (g['service'] == selection['service']) &
@@ -229,22 +255,45 @@ def update_d1(agg, events, selection):
         ]
 
     figs = []
+
     for s in FIXED_SERVICES:
         sub = g[g['service'] == s]
         if sub.empty:
             continue
 
+        # ---- PCP dimensions (EXACTLY same metrics as before)
+        dimensions = [
+            dict(label='Satisfaction', values=sub['patient_satisfaction']),
+            dict(label='Staff Morale', values=sub['staff_morale']),
+            dict(label='Admitted', values=sub['patients_admitted']),
+            dict(label='Refused', values=sub['patients_refused'])
+        ]
+
+        # ---- APPLY INTEGRATED BRUSHING (NEW, minimal)
+        for k, v in (pcp_brush or {}).items():
+            # k looks like: "dimensions[1].constraintrange"
+            idx = int(k.split('[')[1].split(']')[0])
+            dimensions[idx]['constraintrange'] = v
+
         fig = go.Figure(go.Parcoords(
-            line=dict(color=sub['status_id'], colorscale=COLORSCALE),
-            dimensions=[
-                dict(label='Satisfaction', values=sub['patient_satisfaction']),
-                dict(label='Staff Morale', values=sub['staff_morale']),
-                dict(label='Admitted', values=sub['patients_admitted']),
-                dict(label='Refused', values=sub['patients_refused'])
-            ]
+            line=dict(
+                color=sub['status_id'],
+                colorscale=COLORSCALE
+            ),
+            dimensions=dimensions
         ))
-        fig.update_layout(title=s, height=450)
-        figs.append(dcc.Graph(figure=fig))
+
+        fig.update_layout(
+            title=s,
+            height=450
+        )
+
+        figs.append(
+            dcc.Graph(
+                id={'type': 'pcp-chart', 'index': s},  # ← REQUIRED for linking
+                figure=fig
+            )
+        )
 
     return html.Div(
         figs,
