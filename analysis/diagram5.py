@@ -6,6 +6,17 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
+# TODO
+# - Service filter + selection (like select a service partition in the drill-down?)
+# - Week range filter + selection
+# - Filter by event
+# - Selecting a region on the bubble chart to filter other charts (timeline + drill-down)
+# - Selecting a color and blurring the rest
+# - Introduce a cluster color scheme that does not intervene with the service colors (not too similar, etc.)
+
+# - Motivate the choice of clusters (numbers, etc.!)
+
+
 # ------------------------
 # 1. Config / Data Load
 # ------------------------
@@ -52,13 +63,13 @@ app.layout = html.Div([
     html.Div([
         # LEFT COLUMN: Bubble Chart
         html.Div([
-            html.H3("State Space", style={'textAlign': 'center', 'fontSize': '16px'}),
+            html.H3("", style={'textAlign': 'center', 'fontSize': '16px'}),
             dcc.Graph(id='bubble-chart')
         ], style={'width': '58%', 'display': 'inline-block', 'verticalAlign': 'top'}),
         
         # RIGHT COLUMN: Heatmap and Timeline
         html.Div([
-            html.H3("Cluster DNA", style={'textAlign': 'center', 'fontSize': '16px'}),
+            html.H3("", style={'textAlign': 'center', 'fontSize': '16px'}),
             dcc.Graph(id='heatmap-dna', style={'height': '300px'}),
             
             html.H3("Timeline", style={'textAlign': 'center', 'fontSize': '16px', 'marginTop': '20px'}),
@@ -69,7 +80,7 @@ app.layout = html.Div([
     # BOTTOM ROW: Drill-down
     html.Div([
         html.Hr(),
-        html.H3("Capacity Drill-down: Distinguishing the '100% Clutter'", style={'textAlign': 'center', 'fontSize': '16px'}),
+        html.H3("", style={'textAlign': 'center', 'fontSize': '16px'}),
         html.P("Detailed view of services operating >95% capacity. Separated by service to show satisfaction spread.",
                style={'textAlign': 'center', 'color': '#777', 'fontSize': '12px'}),
         dcc.Graph(id='capacity-drilldown', style={'height': '600px'})
