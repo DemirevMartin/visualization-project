@@ -218,14 +218,16 @@ def update_metric_brush(click_list, stored):
 # ------------------------
 # Rectangle time brushing (NEW)
 # ------------------------
+from dash.exceptions import PreventUpdate
 @app.callback(
     Output('d2-time-selection', 'data'),
     Input({'type': 'd2-chart', 'index': dash.ALL}, 'selectedData'),
     prevent_initial_call=True
 )
 def capture_rectangle(selected_list):
-    if not selected_list:
-        return None
+
+    if not selected_list or all(sel is None for sel in selected_list):
+        raise PreventUpdate
 
     weeks, service = set(), None
     for sel in selected_list:
@@ -237,7 +239,7 @@ def capture_rectangle(selected_list):
                     service = p['customdata']
 
     if not weeks or not service:
-        return None
+        raise PreventUpdate
 
     return {'service': service, 'weeks': sorted(weeks)}
 
@@ -279,17 +281,22 @@ def update_d1(agg, events, services, selection, pcp_brush):
     services = services or FIXED_SERVICES
     g, time_col = aggregate_line(df, agg,services, events)
 
-    # Existing rectangle time brushing logic (UNCHANGED)
-    if selection:
-        g = g[
-            (g['service'] == selection['service']) &
-            (g[time_col].isin(selection['weeks']))
-        ]
-
+    selected_weeks = selection['weeks'] if selection else None
+   
+    if selected_weeks:
+        pcp_mask = g[time_col].isin(selected_weeks)
+    else:
+        pcp_mask = np.ones(len(g), dtype=bool)
+    
     figs = []
 
     for s in services:
         sub = g[g['service'] == s]
+        if selected_weeks:
+            pcp_mask = sub[time_col].isin(selected_weeks)
+        else:
+            pcp_mask = np.ones(len(sub), dtype=bool)
+
         if sub.empty:
             continue
 
@@ -306,22 +313,28 @@ def update_d1(agg, events, services, selection, pcp_brush):
             # k looks like: "dimensions[1].constraintrange"
             idx = int(k.split('[')[1].split(']')[0])
             dimensions[idx]['constraintrange'] = v
-
+        pcp_color = sub['status_id'].astype(float) + np.where(pcp_mask, 0.5, 0.0)
         fig = go.Figure(go.Parcoords(
-            line=dict(
-                color=sub['status_id'],
-                colorscale=COLORSCALE,
-                showscale=True,                     # ← REQUIRED
-                cmin=0,
-                cmax=1,
-                colorbar=dict(
-                    title="Availability",
-                    tickvals=[0, 1],
-                    ticktext=["Sufficient", "Shortage"]
-                    ),
-            ),
-            dimensions=dimensions
-        ))   
+        line=dict(
+            color=pcp_color,
+            cmin=0.0,
+            cmax=1.5,
+            colorscale=[
+                [0.0, '#c6dbef'],   # Sufficient (dim)
+                [0.33, '#1f77b4'],  # Sufficient (selected)
+                [0.66, '#f2b6b6'],  # Shortage (dim)
+                [1.0, '#d62728']    # Shortage (selected)
+            ],
+            showscale=True,
+            colorbar=dict(
+                title="Availability",
+                tickvals=[0.25, 1.25],
+                ticktext=["Sufficient", "Shortage"]
+            )
+        ),
+        dimensions=dimensions
+    ))
+
 
         fig.update_layout(
             title=SERVICE_LABELS.get(s, s),
@@ -352,11 +365,35 @@ def update_d1(agg, events, services, selection, pcp_brush):
     Input('time-granularity', 'value'),
     Input('event-filter', 'value'),
     Input('service-filter', 'value'),   
-    Input('global-metric-brush', 'data')
+    Input('global-metric-brush', 'data'),
+    Input('pcp-brush-store', 'data'),
+    State('d2-time-selection', 'data')   # ← ADD
 )
-def update_d2(agg, events,services, brushed):
+def update_d2(agg, events,services, brushed, pcp_brush, selection):
+    pcp_dim_to_metric = {
+        0: 'patient_satisfaction',
+        1: 'staff_morale',
+        2: 'patients_admitted',
+        3: 'patients_refused'
+    }
+
+    pcp_ranges = {}
+    for k, v in (pcp_brush or {}).items():
+        idx = int(k.split('[')[1].split(']')[0])
+        if idx in pcp_dim_to_metric:
+            pcp_ranges[idx] = v
+
     services = services or FIXED_SERVICES
     g, time_col = aggregate_line(df, agg, services, events)
+        # ------------------------
+    # Rectangle time bounds
+    # ------------------------
+    if selection and selection.get('weeks'):
+        x0 = min(selection['weeks'])
+        x1 = max(selection['weeks'])
+    else:
+        x0 = x1 = None
+
     x_axis_label = {
         'weekly': 'Week',
         'monthly': 'Month',
@@ -370,8 +407,8 @@ def update_d2(agg, events,services, brushed):
 )
 
     # --- FIXED X-AXIS RANGE (global) ---
-    x_min = g[time_col].min()
-    x_max = g[time_col].max()
+    #x_min = g[time_col].min()
+    #x_max = g[time_col].max()
 
     selected = set(brushed or [])
     is_brushed = bool(selected)
@@ -392,6 +429,20 @@ def update_d2(agg, events,services, brushed):
 
         for m, label in zip(METRICS, METRIC_LABELS):
             sel = label in selected
+            pcp_mask = np.zeros(len(sub), dtype=bool)
+            for idx, v in pcp_ranges.items():
+                if pcp_dim_to_metric[idx] == m and v:
+
+                    # v may be [lo, hi] OR [[lo, hi], [lo2, hi2], ...]
+                    ranges = v if isinstance(v[0], (list, tuple)) else [v]
+
+                    mask_part = np.zeros(len(sub), dtype=bool)
+                    for lo, hi in ranges:
+                        mask_part |= (sub[m] >= lo) & (sub[m] <= hi)
+
+                    pcp_mask = mask_part
+
+                
             fig.add_trace(go.Scatter(
             x=sub[time_col],
             y=sub[m],
@@ -414,21 +465,45 @@ def update_d2(agg, events,services, brushed):
             ),
 
             opacity=1.0 if (not is_brushed or sel) else 0.15,
-            line=dict(width=4 if sel else 2)
+            line=dict(width=4 if sel else 2),
+            # PCP highlight = bigger filled dots (NEW)
+            marker=dict(
+            size=np.where(pcp_mask, 12, 4)
+        )
         ))
 
+        # ------------------------
+# Shaded time band (rectangle surrogate)
+# ------------------------
+        shapes = []
+
+        if x0 is not None and x1 is not None:
+            shapes.append(
+                dict(
+                    type="rect",
+                    xref="x",
+                    yref="paper",
+                    x0=x0,
+                    x1=x1,
+                    y0=0,
+                    y1=1,
+                    fillcolor="rgba(255, 165, 0, 0.25)",  # translucent orange
+                    line=dict(width=0),
+                    layer="below"
+                )
+            )
 
         fig.update_layout(
             title=SERVICE_LABELS.get(s, s),
             dragmode='select',
             clickmode='event+select',
-            xaxis=dict(
-            title=x_axis_label,
-            range=[x_min, x_max]
-            ),
+            xaxis=dict(title=x_axis_label),
             yaxis=dict(
             title='Value'
-            )
+            ),
+            uirevision=f"line-chart-{s}",
+            selectionrevision="keep-selection",
+            shapes=shapes    
         )
 
         charts.append(dcc.Graph(
@@ -443,13 +518,14 @@ def update_d2(agg, events,services, brushed):
 @app.callback(
     Output('global-metric-brush', 'data', allow_duplicate=True),
     Output('d2-time-selection', 'data', allow_duplicate=True),
+    Output('pcp-brush-store', 'data', allow_duplicate=True),
     Input('reset-selection-btn', 'n_clicks'),
     prevent_initial_call=True
 )
 
 def reset_all_selections(n_clicks):
     if n_clicks:
-        return [], None
+        return [], None, {}
     return dash.no_update, dash.no_update
 
 # ------------------------
