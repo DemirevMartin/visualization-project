@@ -36,7 +36,22 @@ for c in ['service', 'event']:
     if c not in df.columns:
         df[c] = np.nan
 
-FIXED_SERVICES = ['ICU', 'emergency', 'general_medicine', 'surgery']
+SERVICE_LABELS = {
+    'emergency': 'Emergency',
+    'general_medicine': 'General Medicine',
+    'ICU': 'ICU',
+    'surgery': 'Surgery'
+}
+
+FIXED_SERVICES = list(SERVICE_LABELS.keys())
+EVENT_LABELS = {
+    'flu': 'Flu',
+    'donation': 'Donation',
+    'strike': 'Strike',
+    'none': 'None'
+}
+FIXED_EVENTS = list(EVENT_LABELS.keys())
+
 
 # ------------------------
 # Shortage logic
@@ -112,6 +127,7 @@ app.layout = html.Div([
     dcc.Store(id='global-metric-brush', data=[]),
     dcc.Store(id='d2-time-selection', data=None),
     dcc.Store(id='pcp-brush-store', data={}),
+    
 
 
     html.Div([
@@ -125,12 +141,27 @@ app.layout = html.Div([
             value='weekly',
             inline=True
         ),
+       dcc.Dropdown(
+        id='event-filter',
+        options=[
+            {'label': EVENT_LABELS.get(e, e), 'value': e}
+            for e in all_events
+        ],
+        value=all_events,
+        multi=True
+    ),
+
         dcc.Dropdown(
-            id='event-filter',
-            options=[{'label': e, 'value': e} for e in all_events],
-            value=all_events,
-            multi=True
-        )
+        id='service-filter',
+        options=[
+            {'label': SERVICE_LABELS[s], 'value': s}
+            for s in FIXED_SERVICES
+        ],
+        value=FIXED_SERVICES,
+        multi=True,
+        placeholder="Filter services"
+    )
+
     ]),
 
     html.Hr(),
@@ -240,12 +271,13 @@ def capture_pcp_brush(restyle_list, stored):
     Output('d1-container', 'children'),
     Input('time-granularity', 'value'),
     Input('event-filter', 'value'),
+    Input('service-filter', 'value'),  
     Input('d2-time-selection', 'data'),
-    Input('pcp-brush-store', 'data')   # ← ADD
+    Input('pcp-brush-store', 'data')   
 )
-def update_d1(agg, events, selection, pcp_brush):
-
-    g, time_col = aggregate_line(df, agg, FIXED_SERVICES, events)
+def update_d1(agg, events, services, selection, pcp_brush):
+    services = services or FIXED_SERVICES
+    g, time_col = aggregate_line(df, agg,services, events)
 
     # Existing rectangle time brushing logic (UNCHANGED)
     if selection:
@@ -256,7 +288,7 @@ def update_d1(agg, events, selection, pcp_brush):
 
     figs = []
 
-    for s in FIXED_SERVICES:
+    for s in services:
         sub = g[g['service'] == s]
         if sub.empty:
             continue
@@ -278,13 +310,21 @@ def update_d1(agg, events, selection, pcp_brush):
         fig = go.Figure(go.Parcoords(
             line=dict(
                 color=sub['status_id'],
-                colorscale=COLORSCALE
+                colorscale=COLORSCALE,
+                showscale=True,                     # ← REQUIRED
+                cmin=0,
+                cmax=1,
+                colorbar=dict(
+                    title="Availability",
+                    tickvals=[0, 1],
+                    ticktext=["Sufficient", "Shortage"]
+                    ),
             ),
             dimensions=dimensions
-        ))
+        ))   
 
         fig.update_layout(
-            title=s,
+            title=SERVICE_LABELS.get(s, s),
             height=450
         )
 
@@ -311,10 +351,17 @@ def update_d1(agg, events, selection, pcp_brush):
     Output('d2-container', 'children'),
     Input('time-granularity', 'value'),
     Input('event-filter', 'value'),
+    Input('service-filter', 'value'),   
     Input('global-metric-brush', 'data')
 )
-def update_d2(agg, events, brushed):
-    g, time_col = aggregate_line(df, agg, FIXED_SERVICES, events)
+def update_d2(agg, events,services, brushed):
+    services = services or FIXED_SERVICES
+    g, time_col = aggregate_line(df, agg, services, events)
+    x_axis_label = {
+        'weekly': 'Week',
+        'monthly': 'Month',
+        'quarterly': 'Quarter'
+    }[agg]
 
     # Context (flu / donation / strike / none) per service & time
     context_map = (
@@ -330,27 +377,58 @@ def update_d2(agg, events, brushed):
     is_brushed = bool(selected)
     charts = []
 
-    for s in sorted(g['service'].unique()):
+    for s in services:
         sub = g[g['service'] == s]
         fig = go.Figure()
+        event_series = (
+            df[
+                (df['service'] == s) &
+                (df[time_col].isin(sub[time_col]))
+            ]
+            .drop_duplicates(subset=[time_col])
+            .set_index(time_col)['event']
+            .reindex(sub[time_col])
+        )
 
         for m, label in zip(METRICS, METRIC_LABELS):
             sel = label in selected
             fig.add_trace(go.Scatter(
-                x=sub[time_col],
-                y=sub[m],
-                name=label,
-                mode='lines+markers',
-                customdata=[s] * len(sub),
-                opacity=1.0 if (not is_brushed or sel) else 0.15,
-                line=dict(width=4 if sel else 2)
-            ))
+            x=sub[time_col],
+            y=sub[m],
+            name=label,
+            mode='lines+markers',
+
+            # DO NOT TOUCH — required for brushing
+            customdata=[s] * len(sub),
+
+            # Event shown ONLY in hover
+            hovertext=[
+                EVENT_LABELS.get(ev, ev) if pd.notna(ev) else "None"
+                for ev in event_series
+            ],
+
+            hovertemplate=(
+                "Service: %{customdata}<br>"
+                "Event: %{hovertext}<br>"
+                "Value: %{y}<extra></extra>"
+            ),
+
+            opacity=1.0 if (not is_brushed or sel) else 0.15,
+            line=dict(width=4 if sel else 2)
+        ))
+
 
         fig.update_layout(
-            title=s,
+            title=SERVICE_LABELS.get(s, s),
             dragmode='select',
             clickmode='event+select',
-            xaxis=dict(range=[x_min, x_max])
+            xaxis=dict(
+            title=x_axis_label,
+            range=[x_min, x_max]
+            ),
+            yaxis=dict(
+            title='Value'
+            )
         )
 
         charts.append(dcc.Graph(
