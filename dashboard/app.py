@@ -1,8 +1,8 @@
 import dash
 from dash import dcc, html, Input, Output
 
+from diagrams import tab1, tab2, tab3
 from loader import load_data
-from diagrams import diagram1, diagram3, diagram5
 
 # 1. Load Data
 df = load_data()
@@ -21,7 +21,7 @@ app.layout = html.Div([
 
     dcc.Tabs([
         # --- TASK 1 ---
-        dcc.Tab(label='1. Linked Views', children=diagram1.create_layout(df)),
+        dcc.Tab(label='1. Linked Views', children=tab1.create_layout(df)),
 
         # --- TASK 3 ---
         dcc.Tab(label='3. Staff vs Outcomes', children=[
@@ -54,14 +54,14 @@ app.layout = html.Div([
         ]),
 
         # --- TASK 5 ---
-        dcc.Tab(label='5. Operational Strategy', children=diagram5.create_layout(df)),
+        dcc.Tab(label='5. Operational Strategy', children=tab3.create_layout(df)),
     ], style={'fontFamily': 'Arial'})
 ])
 
 # --- CALLBACKS ---
 
 # Task 1
-diagram1.register_callbacks(app, df)
+tab1.register_callbacks(app, df)
 
 # Task 3
 @app.callback([Output('t3-content', 'children'), Output('t3-insights', 'children')],
@@ -72,12 +72,12 @@ def update_t3(weeks, services, view):
     sub = df[mask].copy()
     if sub.empty: return html.Div("No data"), ""
     
-    if view == 'splom': return diagram3.create_splom_view(sub)
-    elif view == 'research': return diagram3.create_research_view(sub)
-    else: return diagram3.create_correlation_view(sub)
+    if view == 'splom': return tab2.create_splom_view(sub)
+    elif view == 'research': return tab2.create_research_view(sub)
+    else: return tab2.create_correlation_view(sub)
 
 # Task 5
-diagram5.register_callbacks(app, df)
+tab3.register_callbacks(app, df)
 
 if __name__ == '__main__':
     app.run(debug=True)

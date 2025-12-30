@@ -84,13 +84,13 @@ def create_layout(df):
                     html.Label("Week Range:", style={'fontWeight': 'bold'}),
                     dcc.RangeSlider(
                         id='d5-week-slider',
-                        min=min_week, max=max_week,
+                        min=min_week, max=max_week, step=1,
                         value=[min_week, max_week],
-                        marks={i: str(i) for i in range(min_week, max_week+1, 5)}
+                        marks={i: str(i) for i in range(min_week, max_week+1)} ,
+                        tooltip={"placement": "bottom", "always_visible": False}
                     ),
-                ], style={'width': '35%', 'display': 'inline-block', 'verticalAlign': 'top', 'paddingLeft': '2%'}),
+                ], style={'width': '100%', 'display': 'block', 'marginTop': '20px'}),
             ]),
-            
             # Row 3: Reset
             html.Div([
                 html.Button("Reset All Filters", id="d5-reset-filters-btn", n_clicks=0, style={'cursor':'pointer', 'padding': '5px 15px'}),
@@ -425,3 +425,4 @@ def register_callbacks(app, df):
 
         return fig_bubble, fig_dna, fig_timeline, fig_drill, cluster_options, \
                ret_services, ret_events, ret_weeks, ret_cluster_focus, ret_selected_data
+    
