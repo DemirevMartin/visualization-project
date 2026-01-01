@@ -3,15 +3,17 @@ import pandas as pd
 import numpy as np
 from collections import Counter
 
+import plotly.express as px
 import dash
 from dash import dcc, html, Input, Output
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # ------------------------
 # Config / Data load
 # ------------------------
-services_df = pd.read_csv("../data/services_weekly.csv")
-staff_schedule_df = pd.read_csv("../data/staff_schedule.csv")
+services_df = pd.read_csv("data/services_weekly.csv")
+staff_schedule_df = pd.read_csv("data/staff_schedule.csv")
 
 staff_schedule_present_df = staff_schedule_df[staff_schedule_df['present'] == 1]
 
@@ -57,18 +59,33 @@ service_options = [{'label': s.capitalize(), 'value': s} for s in sorted(df_fina
 event_options = [{'label': e.capitalize(), 'value': e} for e in sorted(df_final['event'].unique())]
 
 app.layout = html.Div([
+
     html.H1("Staff Allocation vs Patient Load"),
-    
+
     html.Div([
-        html.Label("Select Service:"),
+    html.Label("View Mode:"),
+    dcc.RadioItems(
+        id='view-mode',
+        options=[
+            {'label': 'By Role (single service)', 'value': 'role'},
+            {'label': 'By Service (comparison)', 'value': 'service'}
+        ],
+        value='role',
+        inline=True
+    )
+    ], style={'margin-bottom': '10px'}),
+
+    html.Div([
+        html.Label("Select Service(s):"),
         dcc.Dropdown(
-            id='service-dropdown',
-            options=service_options,
-            value='emergency',
-            clearable=False,
-            style={"width": "300px"}
+    id='service-dropdown',
+        options=service_options,
+        value=['emergency'],
+        multi=True,
+        clearable=False,
+        style={"width": "400px"}
         )
-    ], style={'display': 'inline-block', 'margin-right': '20px'}),
+    ], style={'margin-right': '20px'}),
 
     html.Div([
         html.Label("Select Event:"),
@@ -76,75 +93,202 @@ app.layout = html.Div([
             id='event-dropdown',
             options=event_options,
             value=None,
-            multi=True,        # Allow selecting multiple events
+            multi=True,
             placeholder="All events",
             style={"width": "300px"}
         )
     ], style={'display': 'inline-block'}),
 
-    dcc.Graph(id='staff-vs-patients')
+    html.Div([
+        html.Label("Select Week Range:"),
+        dcc.RangeSlider(
+            id='week-slider',
+            min=df_final['week'].min(),
+            max=df_final['week'].max(),
+            step=1,
+            value=[
+                df_final['week'].min(),
+                df_final['week'].max()
+            ],
+            marks={int(i): str(int(i)) for i in df_final['week'].unique()},
+            tooltip={"placement": "bottom", "always_visible": False}
+        )
+    ], style={'margin-top': '20px'}),
+
+    dcc.Graph(
+        id='staff-vs-patients',
+        clear_on_unhover=True
+    )
 ])
 
 
 # ----------------------------------------------------
 # Callback
 # ----------------------------------------------------
+
+@app.callback(
+    Output('service-dropdown', 'multi'),
+    Output('service-dropdown', 'value'),
+    Input('view-mode', 'value')
+)
+def update_service_dropdown(view_mode):
+    if view_mode == 'service':
+        return True, ['emergency']  
+    
 @app.callback(
     Output('staff-vs-patients', 'figure'),
+    Input('view-mode', 'value'),
     Input('service-dropdown', 'value'),
-    Input('event-dropdown', 'value')
+    Input('event-dropdown', 'value'),
+    Input('week-slider', 'value'),
+    Input('staff-vs-patients', 'hoverData')
 )
 
 # ----------------------------------------------------
 # Figure
 # ----------------------------------------------------
 
-def figure4(selected_service, selected_events):
+def figure4(view_mode, selected_services, selected_events, selected_weeks, hoverData):
 
-    # Filter by service
-    df_srv = df_final[df_final['service'] == selected_service]
+    if isinstance(selected_services, str):
+        selected_services = [selected_services]
 
-    # Filter by events if selected
+    week_start, week_end = selected_weeks
+
+    df = df_final[
+        (df_final['week'] >= week_start) &
+        (df_final['week'] <= week_end) &
+        (df_final['service'].isin(selected_services))
+    ]
+
     if selected_events:
-        df_srv = df_srv[df_srv['event'].isin(selected_events)]
+        df = df[df['event'].isin(selected_events)]
 
-    df_srv = df_srv.sort_values('week')
-
-    roles_to_plot = ['doctor', 'nurse', 'nursing assistant']  
-    colors = ['#636EFA', '#EF553B', '#00CC96']
-
-    fig = go.Figure()
-
-    # Add stacked bars
-    for i, role in enumerate(roles_to_plot):
-        if role in df_srv.columns:
-            fig.add_trace(go.Bar(
-                x=df_srv['week'],
-                y=df_srv[role],
-                name=role.capitalize(),
-                marker_color=colors[i % len(colors)],
-                hovertemplate='Week %{x}<br>%{y} ' + role + 's<extra></extra>'
-            ))
-
-    # Line for patients admitted
-    fig.add_trace(go.Scatter(
-        x=df_srv['week'],
-        y=df_srv['patients_admitted'],
-        name='Patients Admitted',
-        mode='lines+markers',
-        line=dict(color='black', width=3),
-        yaxis='y2',
-        hovertemplate='Week %{x}<br>%{y} Patients Admitted<extra></extra>'
-    ))
-
-    fig.update_layout(
-        title=f"Staff Allocation vs Patient Load ({selected_service.capitalize()})",
-        xaxis_title="Week",
-        yaxis=dict(title="Staff Count"),
-        yaxis2=dict(title="Patients Admitted", overlaying='y', side='right'),
-        barmode='stack',
-        legend=dict(x=1.1, y=1)
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.1,
+        subplot_titles=(
+            "Staff Allocation",
+            "Patients Admitted"
+        )
     )
+
+    # =========================
+    # VIEW 1 — BY ROLE
+    # =========================
+    if view_mode == 'role':
+
+    # Aggregate across selected services
+        df_agg = (
+            df
+            .groupby('week', as_index=False)
+            .agg({
+                'doctor': 'sum',
+                'nurse': 'sum',
+                'nursing assistant': 'sum',
+                'patients_admitted': 'sum'
+            })
+            .sort_values('week')
+        )
+
+        roles = ['doctor', 'nurse', 'nursing assistant']
+        colors = ['#636EFA', '#EF553B', '#00CC96']
+
+        # --- Staff stacked by role ---
+        for i, role in enumerate(roles):
+            fig.add_trace(
+                go.Bar(
+                    x=df_agg['week'],
+                    y=df_agg[role],
+                    name=role.capitalize(),
+                    marker_color=colors[i]
+                ),
+                row=1,
+                col=1
+            )
+
+        # --- Patients (aggregated) ---
+        fig.add_trace(
+            go.Scatter(
+                x=df_agg['week'],
+                y=df_agg['patients_admitted'],
+                name='Patients Admitted (All Services)',
+                mode='lines+markers',
+                line=dict(color='black', width=3)
+            ),
+            row=2,
+            col=1
+        )
+
+        title_suffix = " + ".join([s.capitalize() for s in selected_services])
+
+    # =========================
+    # VIEW 2 — BY SERVICE
+    # =========================
+    else:
+        services = selected_services
+        colors = px.colors.qualitative.Set2
+
+        # --- Staff (stacked by service) ---
+        for i, srv in enumerate(services):
+            df_srv = df[df['service'] == srv].sort_values('week')
+            staff_total = (
+                df_srv['doctor'] +
+                df_srv['nurse'] +
+                df_srv['nursing assistant']
+            )
+
+            fig.add_trace(
+                go.Bar(
+                    x=df_srv['week'],
+                    y=staff_total,
+                    name=srv.capitalize(),
+                    marker_color=colors[i % len(colors)]
+                ),
+                row=1,
+                col=1
+            )
+
+            # --- Patients lines ---
+            fig.add_trace(
+                go.Scatter(
+                    x=df_srv['week'],
+                    y=df_srv['patients_admitted'],
+                    name=f"{srv.capitalize()} Patients",
+                    mode='lines+markers'
+                ),
+                row=2,
+                col=1
+            )
+
+        title_suffix = " vs ".join([s.capitalize() for s in services])
+
+    # =========================
+    # Layout
+    # =========================
+    fig.update_layout(
+        title=f"Staff Allocation and Patient Load ({title_suffix})",
+        barmode='stack',
+        height=750,
+        legend=dict(orientation="h", y=1.05)
+    )
+
+    fig.update_xaxes(title_text="Week", row=2, col=1)
+    fig.update_yaxes(title_text="Staff Count", row=1, col=1)
+    fig.update_yaxes(title_text="Patients Admitted", row=2, col=1)
+
+    # Hover highlight
+    if hoverData and 'points' in hoverData:
+        week = hoverData['points'][0]['x']
+        fig.add_vrect(
+            x0=week - 0.5,
+            x1=week + 0.5,
+            fillcolor="rgba(200,200,200,0.3)",
+            line_width=0,
+            layer="below"
+        )
 
     return fig
 
