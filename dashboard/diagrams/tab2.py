@@ -295,35 +295,38 @@ def create_layout(df):
     max_week = df['week'].max()
 
     return html.Div([
-        # Header
-        html.Div([
-            html.H1("Hospital Staff Analysis",
-                    style={'color': '#2c3e50', 'marginBottom': '5px'})
-        ], style={'textAlign': 'center', 'padding':'20px', 'backgroundColor':'#ecf0f1'}),
+        html.H1("Hospital Staff Analysis", 
+                style={'textAlign': 'center', 'fontFamily': 'Arial, sans-serif'}),
+        
+        html.P("Comprehensive analysis of staff performance, satisfaction, and allocation.",
+               style={'textAlign': 'center', 'color': '#555'}),
 
         # ========== View 1 ==========
         html.Div([
-            html.H3("View 1: Staff Performance & Satisfaction Analysis", 
+            html.H3("Staff Performance & Satisfaction Analysis", 
                     style={'color': '#2c3e50', 'borderBottom': '3px solid #3498db', 'paddingBottom': '10px'}),
             
             dcc.Store(id='dash1-store', data=None),
             
+            # Control Panel
             html.Div([
                 html.Div([
                     html.Label("Week Range:", style={'fontWeight': 'bold'}),
                     dcc.RangeSlider(id='dash1-week-slider', min=min_week, max=max_week,
                                    value=[1, 52], marks={i: str(i) for i in range(min_week, max_week + 1, 10)}, step=1),
-                ], style={'width': '45%', 'display': 'inline-block', 'paddingRight': '2%'}),
+                ], style={'width': '45%', 'display': 'inline-block', 'paddingRight': '2%', 'verticalAlign': 'top'}),
                 
                 html.Div([
                     html.Label("Services:", style={'fontWeight': 'bold'}),
                     dcc.Dropdown(id='dash1-services', options=service_options, value=all_services, multi=True),
-                ], style={'width': '45%', 'display': 'inline-block'}),
+                ], style={'width': '45%', 'display': 'inline-block', 'verticalAlign': 'top'}),
                 
-                html.Button("Reset", id='dash1-reset', n_clicks=0,
-                           style={'backgroundColor': '#e74c3c', 'color': 'white', 'border': 'none',
-                                  'padding': '10px 20px', 'borderRadius': '5px', 'marginLeft': '20px'})
-            ], style={'padding': '15px', 'backgroundColor': '#f8f9fa', 'borderRadius': '8px', 'marginBottom': '10px'}),
+                html.Div([
+                    html.Button("Reset", id='dash1-reset', n_clicks=0,
+                               style={'cursor':'pointer', 'padding': '5px 15px', 'marginTop': '15px'})
+                ], style={'textAlign': 'center'})
+
+            ], style={'width': '95%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '20px'}),
             
             html.Div(id='dash1-status'),
             dcc.Graph(id='dash1-graph', config={'displayModeBar': True, 'modeBarButtonsToAdd': ['select2d', 'lasso2d']}),
@@ -332,9 +335,10 @@ def create_layout(df):
 
         # ========== View 2 ==========
         html.Div([
-            html.H3("View 2: Staff Allocation Timeline", 
+            html.H3("Staff Allocation Timeline", 
                     style={'color': '#2c3e50', 'borderBottom': '3px solid #2ecc71', 'paddingBottom': '10px'}),
             
+            # Control Panel
             html.Div([
                 html.Div([
                     html.Label("View Mode:", style={'fontWeight': 'bold'}),
@@ -342,27 +346,28 @@ def create_layout(df):
                                   options=[{'label': ' By Role', 'value': 'role'},
                                           {'label': ' By Service', 'value': 'service'}],
                                   value='role', inline=True, style={'marginTop': '5px'}),
-                ], style={'width': '20%', 'display': 'inline-block', 'paddingRight': '2%'}),
+                ], style={'width': '20%', 'display': 'inline-block', 'paddingRight': '2%', 'verticalAlign': 'top'}),
                 
                 html.Div([
                     html.Label("Service(s):", style={'fontWeight': 'bold'}),
                     dcc.Dropdown(id='dash2-services', options=service_options, value=['emergency'], 
                                 multi=True, clearable=False),
-                ], style={'width': '35%', 'display': 'inline-block', 'paddingRight': '2%'}),
+                ], style={'width': '35%', 'display': 'inline-block', 'paddingRight': '2%', 'verticalAlign': 'top'}),
                 
                 html.Div([
                     html.Label("Events:", style={'fontWeight': 'bold'}),
                     dcc.Dropdown(id='dash2-events', options=event_options, value=None, multi=True, placeholder="All events"),
-                ], style={'width': '35%', 'display': 'inline-block'}),
-            ], style={'marginBottom': '15px'}),
-            
-            html.Div([
-                html.Label("Week Range:", style={'fontWeight': 'bold'}),
-                dcc.RangeSlider(id='dash2-week-slider', min=min_week, max=max_week,
-                               value=[min_week, max_week],
-                               marks={int(i): str(int(i)) for i in df['week'].unique()}, step=1,
-                               tooltip={"placement": "bottom", "always_visible": False}),
-            ], style={'padding': '15px', 'backgroundColor': '#f8f9fa', 'borderRadius': '8px'}),
+                ], style={'width': '35%', 'display': 'inline-block', 'verticalAlign': 'top'}),
+
+                html.Div([
+                    html.Label("Week Range:", style={'fontWeight': 'bold'}),
+                    dcc.RangeSlider(id='dash2-week-slider', min=min_week, max=max_week,
+                                   value=[min_week, max_week],
+                                   marks={int(i): str(int(i)) for i in df['week'].unique()}, step=1,
+                                   tooltip={"placement": "bottom", "always_visible": False}),
+                ], style={'marginTop': '20px'}),
+
+            ], style={'width': '95%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '20px'}),
             
             dcc.Graph(id='dash2-graph', config={'displayModeBar': True}),
         ], style={'padding': '20px', 'backgroundColor': '#ffffff', 

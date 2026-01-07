@@ -75,67 +75,77 @@ def create_layout(df):
     all_events = sorted(df['event'].dropna().unique())
 
     return html.Div([
-        html.H2("Linked Dashboard — Metric & Time Brushing"),
+        html.H1("Linked Dashboard — Metric & Time Brushing", 
+                style={'textAlign': 'center', 'fontFamily': 'Arial, sans-serif'}),
+        
+        html.P("Analyze metrics across time and services. Brush over charts to filter.",
+               style={'textAlign': 'center', 'color': '#555'}),
 
         dcc.Store(id='d1-global-metric-brush', data=[]),
         dcc.Store(id='d1-time-selection', data=None),
         dcc.Store(id='d1-pcp-brush-store', data={}),
 
+        # --- Control Panel ---
         html.Div([
-            dcc.RadioItems(
-                id='d1-time-granularity',
-                options=[
-                    {'label': 'Weekly', 'value': 'weekly'},
-                    {'label': 'Monthly', 'value': 'monthly'},
-                    {'label': 'Quarterly', 'value': 'quarterly'}
-                ],
-                value='weekly',
-                inline=True
-            ),
-            dcc.Dropdown(
-                id='d1-event-filter',
-                className='event-filter',
-                options=[
-                    {'label': EVENT_LABELS.get(e, e), 'value': e}
-                    for e in all_events
-                ],
-                value=all_events,
-                multi=True
-            ),
-            dcc.Dropdown(
-                id='d1-service-filter',
-                className='service-filter',
-                options=[
-                    {'label': SERVICE_LABELS[s], 'value': s}
-                    for s in FIXED_SERVICES
-                ],
-                value=FIXED_SERVICES,
-                multi=True,
-                placeholder="Filter services"
-            )
-        ]),
-
-        html.Hr(),
-
-        html.Div(id='d1-container'),
-        html.Hr(),
-
-        html.Div([
-            html.Div(
-                html.Button(
-                    "Reset selection",
-                    id="d1-reset-selection-btn",
-                    n_clicks=0,
-                    style={
-                        "marginBottom": "8px",
-                        "padding": "6px 12px",
-                        "fontWeight": "bold"
-                    }
+            html.Div([
+                html.Label("Time Granularity:", style={'fontWeight': 'bold'}),
+                dcc.RadioItems(
+                    id='d1-time-granularity',
+                    options=[
+                        {'label': ' Weekly', 'value': 'weekly'},
+                        {'label': ' Monthly', 'value': 'monthly'},
+                        {'label': ' Quarterly', 'value': 'quarterly'}
+                    ],
+                    value='weekly',
+                    inline=True,
+                    style={'marginTop': '5px'}
                 ),
-                style={"textAlign": "right"}
-            ),
+            ], style={'marginBottom': '15px'}),
+
+            html.Div([
+                html.Div([
+                    html.Label("Filter Events:", style={'fontWeight': 'bold'}),
+                    dcc.Dropdown(
+                        id='d1-event-filter',
+                        className='event-filter',
+                        options=[
+                            {'label': EVENT_LABELS.get(e, e), 'value': e}
+                            for e in all_events
+                        ],
+                        value=all_events,
+                        multi=True
+                    ),
+                ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top'}),
+
+                html.Div([
+                    html.Label("Filter Services:", style={'fontWeight': 'bold'}),
+                    dcc.Dropdown(
+                        id='d1-service-filter',
+                        className='service-filter',
+                        options=[
+                            {'label': SERVICE_LABELS[s], 'value': s}
+                            for s in FIXED_SERVICES
+                        ],
+                        value=FIXED_SERVICES,
+                        multi=True,
+                        placeholder="Filter services"
+                    ),
+                ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top', 'paddingLeft': '4%'}),
+            ]),
+             
+            # Reset Button
+            html.Div([
+                html.Button("Reset selection", id="d1-reset-selection-btn", n_clicks=0, 
+                            style={'cursor':'pointer', 'padding': '5px 15px', 'marginTop': '15px'}),
+            ], style={'textAlign': 'center'})
+
+        ], style={'width': '90%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '20px'}),
+
+        html.Div(id='d1-container', style={'width': '95%', 'margin': '0 auto'}),
+        
+        html.Div([
             html.Div(id='d2-container')
-        ])
+        ], style={'width': '95%', 'margin': '0 auto', 'marginTop': '20px'})
     ])
 
 # ------------------------
