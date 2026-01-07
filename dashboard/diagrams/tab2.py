@@ -185,7 +185,7 @@ def create_view1(df, selected_weeks=None, selected_services=None):
     
     fig.update_layout(
         height=800,
-        title_text="<b>View 1: Staff Performance Analysis</b><br><sub>TOP panels linked by WEEK | BOTTOM panels linked by SERVICE</sub>",
+        title_text="TOP panels linked by WEEK | BOTTOM panels linked by SERVICE",
         template='plotly_white', showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
         hovermode='closest'
@@ -269,7 +269,7 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
         fig.add_vrect(x0=week - 0.5, x1=week + 0.5, fillcolor="rgba(200,200,200,0.3)", line_width=0, layer="below")
 
     fig.update_layout(
-        title=f"<b>View 2: Staff Allocation Timeline</b><br><sub>{title_suffix}</sub>",
+        title=f"",
         barmode='stack', height=600, legend=dict(orientation="h", y=1.08),
         template='plotly_white'
     )
@@ -311,18 +311,21 @@ def create_layout(df):
             # Control Panel
             html.Div([
                 html.Div([
-                    html.Label("Week Range:", style={'fontWeight': 'bold'}),
-                    dcc.RangeSlider(id='dash1-week-slider', min=min_week, max=max_week,
-                                   value=[1, 52], marks={i: str(i) for i in range(min_week, max_week + 1, 10)}, step=1),
-                ], style={'width': '45%', 'display': 'inline-block', 'paddingRight': '2%', 'verticalAlign': 'top'}),
-                
-                html.Div([
                     html.Label("Services:", style={'fontWeight': 'bold'}),
                     dcc.Dropdown(id='dash1-services', options=service_options, value=all_services, multi=True),
-                ], style={'width': '45%', 'display': 'inline-block', 'verticalAlign': 'top'}),
+                ], style={'width': '100%', 'marginBottom': '20px'}),
                 
                 html.Div([
-                    html.Button("Reset", id='dash1-reset', n_clicks=0,
+                    html.Label("Week Range:", style={'fontWeight': 'bold'}),
+                    dcc.RangeSlider(id='dash1-week-slider', min=min_week, max=max_week,
+                                   value=[min_week, max_week], 
+                                   marks={i: str(i) for i in range(min_week, max_week + 1)}, 
+                                   step=1,
+                                   tooltip={"placement": "bottom", "always_visible": False}),
+                ], style={'width': '100%', 'display': 'block', 'marginTop': '20px'}),
+                
+                html.Div([
+                    html.Button("Reset All Filters", id='dash1-reset', n_clicks=0,
                                style={'cursor':'pointer', 'padding': '5px 15px', 'marginTop': '15px'})
                 ], style={'textAlign': 'center'})
 
@@ -367,6 +370,12 @@ def create_layout(df):
                                    tooltip={"placement": "bottom", "always_visible": False}),
                 ], style={'marginTop': '20px'}),
 
+                 # Reset Button
+                html.Div([
+                    html.Button("Reset All Filters", id='dash2-reset', n_clicks=0,
+                               style={'cursor':'pointer', 'padding': '5px 15px', 'marginTop': '15px'})
+                ], style={'textAlign': 'center'})
+
             ], style={'width': '95%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '20px'}),
             
             dcc.Graph(id='dash2-graph', config={'displayModeBar': True}),
@@ -382,10 +391,14 @@ def register_callbacks(app, df):
     
     # We can capture df in the closure for these callbacks
     # Or ensure create_view functions use the df passed here.
+    min_week = df['week'].min()
+    max_week = df['week'].max()
+    all_services = sorted(df['service'].unique())
     
     # CALLBACKS - VIEW 1
     @app.callback(
-        [Output('dash1-graph', 'figure'), Output('dash1-store', 'data')],
+        [Output('dash1-graph', 'figure'), Output('dash1-store', 'data'),
+         Output('dash1-services', 'value'), Output('dash1-week-slider', 'value')],
         [Input('dash1-week-slider', 'value'), Input('dash1-services', 'value'),
          Input('dash1-graph', 'clickData'), Input('dash1-graph', 'selectedData'), Input('dash1-reset', 'n_clicks')],
         [State('dash1-store', 'data')]
@@ -396,10 +409,18 @@ def register_callbacks(app, df):
         
         triggered = ctx.triggered_id
         
+        # Default return values for inputs (no update)
+        ret_services = services
+        ret_weeks = weeks
+
         if triggered == 'dash1-reset' and reset_clicks:
             current_state = {'selected_weeks': None, 'selected_services': None}
+            ret_services = all_services
+            ret_weeks = [min_week, max_week]
+            
         elif triggered in ['dash1-week-slider', 'dash1-services']:
             current_state = {'selected_weeks': None, 'selected_services': None}
+        
         elif triggered == 'dash1-graph' and click_data:
             if 'points' in click_data and len(click_data['points']) > 0:
                 point = click_data['points'][0]
@@ -411,23 +432,28 @@ def register_callbacks(app, df):
                     except (ValueError, TypeError):
                         service = custom[0]
                         current_state['selected_services'] = None if current_state['selected_services'] == [service] else [service]
+        
         elif triggered == 'dash1-graph' and selected_data:
             if 'points' in selected_data:
                 weeks_list = [int(p['customdata'][0]) for p in selected_data['points'] 
                              if 'customdata' in p and p.get('curveNumber', 0) < 16]
                 current_state['selected_weeks'] = sorted(list(set(weeks_list))) if weeks_list else None
         
-        if not services:
-            return go.Figure(), current_state
+        curr_services = ret_services if ret_services else []
+        curr_weeks = ret_weeks if ret_weeks else [min_week, max_week]
+
+        # Filter logic using current values
+        if not curr_services:
+            return go.Figure(), current_state, ret_services, ret_weeks
         
-        mask = (df['week'] >= weeks[0]) & (df['week'] <= weeks[1]) & (df['service'].isin(services))
+        mask = (df['week'] >= curr_weeks[0]) & (df['week'] <= curr_weeks[1]) & (df['service'].isin(curr_services))
         filtered_df = df[mask].copy()
         
         if filtered_df.empty:
-            return go.Figure(), current_state
+            return go.Figure(), current_state, ret_services, ret_weeks
         
         fig = create_view1(filtered_df, current_state['selected_weeks'], current_state['selected_services'])
-        return fig, current_state
+        return fig, current_state, ret_services, ret_weeks
 
     @app.callback(
         Output('dash1-status', 'children'),
@@ -452,9 +478,23 @@ def register_callbacks(app, df):
 
     # CALLBACKS - VIEW 2
     @app.callback(
-        Output('dash2-graph', 'figure'),
+        [Output('dash2-graph', 'figure'),
+         Output('dash2-view-mode', 'value'),
+         Output('dash2-services', 'value'),
+         Output('dash2-events', 'value'),
+         Output('dash2-week-slider', 'value')],
         [Input('dash2-view-mode', 'value'), Input('dash2-services', 'value'), Input('dash2-events', 'value'),
-         Input('dash2-week-slider', 'value'), Input('dash2-graph', 'hoverData')]
+         Input('dash2-week-slider', 'value'), Input('dash2-graph', 'hoverData'), Input('dash2-reset', 'n_clicks')]
     )
-    def update_dash2(view_mode, services, events, weeks, hover_data):
-        return create_view2(df, view_mode, services, events, weeks, hover_data)
+    def update_dash2(view_mode, services, events, weeks, hover_data, reset_clicks):
+        triggered = ctx.triggered_id
+        
+        if triggered == 'dash2-reset':
+            view_mode = 'role'
+            services = ['emergency']
+            events = None
+            weeks = [min_week, max_week]
+            
+        fig = create_view2(df, view_mode, services, events, weeks, hover_data)
+        
+        return fig, view_mode, services, events, weeks

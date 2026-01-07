@@ -135,7 +135,7 @@ def create_layout(df):
              
             # Reset Button
             html.Div([
-                html.Button("Reset selection", id="d1-reset-selection-btn", n_clicks=0, 
+                html.Button("Reset All Filters", id="d1-reset-selection-btn", n_clicks=0, 
                             style={'cursor':'pointer', 'padding': '5px 15px', 'marginTop': '15px'}),
             ], style={'textAlign': 'center'})
 
@@ -161,6 +161,8 @@ def register_callbacks(app, df):
     df['month'] = df.get('month', ((df['week'] - 1) // 4 + 1)).astype(int)
     df['quarter'] = ((df['month'] - 1) // 3 + 1).astype(int)
     
+    all_events_callback = sorted(df['event'].dropna().unique())
+
     numeric_cols = [
         'patients_admitted', 'patient_satisfaction',
         'staff_morale', 'patients_refused',
@@ -462,14 +464,17 @@ def register_callbacks(app, df):
 
     # Reset button
     @app.callback(
-        Output('d1-global-metric-brush', 'data', allow_duplicate=True),
-        Output('d1-time-selection', 'data', allow_duplicate=True),
-        Output('d1-pcp-brush-store', 'data', allow_duplicate=True),
+        [Output('d1-global-metric-brush', 'data', allow_duplicate=True),
+         Output('d1-time-selection', 'data', allow_duplicate=True),
+         Output('d1-pcp-brush-store', 'data', allow_duplicate=True),
+         Output('d1-time-granularity', 'value'),
+         Output('d1-event-filter', 'value'),
+         Output('d1-service-filter', 'value')],
         Input('d1-reset-selection-btn', 'n_clicks'),
         prevent_initial_call=True
     )
     def reset_all_selections(n_clicks):
         if n_clicks:
-            return [], None, {}
-        return dash.no_update, dash.no_update, dash.no_update
+            return [], None, {}, 'weekly', all_events_callback, FIXED_SERVICES
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
     

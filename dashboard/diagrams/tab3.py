@@ -93,38 +93,27 @@ def create_layout(df):
             ]),
             # Row 3: Reset
             html.Div([
+                html.Button("Reset Selection", id="d5-clear-selection-btn", n_clicks=0, style={'cursor':'pointer', 'padding': '5px 15px', 'marginRight': '10px'}),
                 html.Button("Reset All Filters", id="d5-reset-filters-btn", n_clicks=0, style={'cursor':'pointer', 'padding': '5px 15px'}),
             ], style={'textAlign': 'center', 'marginTop': '15px'}),
-            
         ], style={'width': '90%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '20px'}),
 
         # --- Main Dashboard Area ---
         html.Div([
             # LEFT COLUMN: Bubble Chart
             html.Div([
-                html.Div([
-                    html.H3("State Space (Select Region to Filter)", style={'display': 'inline-block', 'fontSize': '16px', 'marginRight': '10px'}),
-                    html.Button("Clear Selection", id="d5-clear-selection-btn", n_clicks=0, style={'cursor':'pointer', 'fontSize': '12px'}),
-                ], style={'textAlign': 'center'}),
-                dcc.Graph(id='d5-bubble-chart')
+                dcc.Graph(id='d5-bubble-chart', style={'height': '660px'})
             ], style={'width': '58%', 'display': 'inline-block', 'verticalAlign': 'top'}),
             
             # RIGHT COLUMN: Heatmap and Timeline
             html.Div([
-                html.H3("Cluster DNA", style={'textAlign': 'center', 'fontSize': '16px'}),
-                dcc.Graph(id='d5-heatmap-dna', style={'height': '300px'}),
-                
-                html.H3("Timeline (Filtered)", style={'textAlign': 'center', 'fontSize': '16px', 'marginTop': '20px'}),
+                dcc.Graph(id='d5-heatmap-dna', style={'height': '300px', 'marginBottom': '10px'}),
                 dcc.Graph(id='d5-heatmap-timeline', style={'height': '350px'})
             ], style={'width': '40%', 'display': 'inline-block', 'verticalAlign': 'top', 'paddingLeft': '2%'})
         ], style={'width': '95%', 'margin': '0 auto'}),
 
         # BOTTOM ROW: Drill-down
         html.Div([
-            html.Hr(),
-            html.H3("Capacity Drill-down (Filtered)", style={'textAlign': 'center', 'fontSize': '16px'}),
-            html.P("Detailed view of services operating >95% capacity.",
-                   style={'textAlign': 'center', 'color': '#777', 'fontSize': '12px'}),
             dcc.Graph(id='d5-capacity-drilldown', style={'height': '600px'})
         ], style={'width': '95%', 'margin': '0 auto', 'marginTop': '30px', 'paddingBottom': '50px'})
     ])
@@ -164,11 +153,12 @@ def register_callbacks(app, df):
          Input('d5-bubble-chart', 'selectedData'),
          Input('d5-reset-filters-btn', 'n_clicks'),
          Input('d5-clear-selection-btn', 'n_clicks'),
-         Input('d5-bubble-chart', 'restyleData')],
+         Input('d5-bubble-chart', 'restyleData'),
+         Input('d5-capacity-drilldown', 'clickData')], # Added input for drilldown interaction
         [State('d5-bubble-chart', 'figure')]
     )
     def update_dashboard(k, selected_services, selected_events, week_range, focus_cluster, bubble_selected, 
-                         reset_clicks, clear_clicks, restyle_data, current_figure):
+                         reset_clicks, clear_clicks, restyle_data, drilldown_click, current_figure):
         
         triggered_id = ctx.triggered_id
         
@@ -197,6 +187,19 @@ def register_callbacks(app, df):
         elif triggered_id == 'd5-clear-selection-btn':
             bubble_selected = None
             ret_selected_data = None
+        
+        # Handle Drilldown click (sync to bubble chart selection)
+        elif triggered_id == 'd5-capacity-drilldown' and drilldown_click:
+            if 'points' in drilldown_click and drilldown_click['points']:
+                # Get the point index from customdata if available, or try to reconstruct
+                point = drilldown_click['points'][0]
+                # We need to find the correct index in the original dataframe
+                if 'customdata' in point and point['customdata']:
+                    selected_idx = point['customdata'][0]
+                    ret_selected_data = {
+                        'points': [{'customdata': [selected_idx]}]
+                    }
+                    bubble_selected = ret_selected_data # Use this for current filtering logic
 
         # ----------------------------------------------------
         # 1. Global Clustering (On Full Data)
@@ -250,6 +253,7 @@ def register_callbacks(app, df):
             mask &= (df_viz['week'] >= week_range[0]) & (df_viz['week'] <= week_range[1])
             
         df_view = df_viz[mask].copy()
+        df_view['index_col'] = df_view.index
 
         # ----------------------------------------------------
         # 3. Apply Interactive Filters (Selection, Focus, Legend)
@@ -306,7 +310,6 @@ def register_callbacks(app, df):
             fig_bubble = no_update
         else:
             df_view['opacity'] = highlight_mask.map({True: 1.0, False: 0.1})
-            df_view['index_col'] = df_view.index
             
             fig_bubble = px.scatter(
                 df_view,
@@ -372,7 +375,7 @@ def register_callbacks(app, df):
                 df_highlight, x='week', y='service', color='cluster_label', symbol='cluster_label',
                 color_discrete_map=color_map,
                 category_orders={"cluster_label": [str(i) for i in range(k)]},
-                title="<b>Timeline:</b> Crisis Patterns (Filtered)",
+                title="<b>Timeline:</b> Crisis Patterns",
                 hover_data=['occupancy_rate']
             )
             fig_timeline.update_traces(marker=dict(size=12, symbol='square'))
@@ -402,8 +405,9 @@ def register_callbacks(app, df):
                 facet_row='service', 
                 color_discrete_map=color_map,
                 category_orders={"cluster_label": [str(i) for i in range(k)]},
-                title="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall (Filtered)",
-                hover_data=['week', 'patients_admitted', 'staff_morale']
+                title="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall",
+                hover_data=['week', 'patients_admitted', 'staff_morale'],
+                custom_data=['index_col']
             )
             
             fig_drill.update_layout(
