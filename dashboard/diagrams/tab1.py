@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html, Input, Output, State, ALL
+from dash import dcc, html, Input, Output, State, ALL, ctx
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
@@ -65,8 +65,7 @@ def aggregate_line(df_in, agg, services, events):
 # Layout
 # ------------------------
 def create_layout(df):
-    # Ensure preprocessing is done if not already
-    # (Assuming df passed from loader has basic columns, but we need time aggregations)
+    # Preprocessing
     if 'month' not in df.columns:
         df['month'] = ((df['week'] - 1) // 4 + 1).astype(int)
     if 'quarter' not in df.columns:
@@ -75,12 +74,9 @@ def create_layout(df):
     all_events = sorted(df['event'].dropna().unique())
 
     return html.Div([
-        html.H1("Linked Dashboard — Metric & Time Brushing", 
+        html.H1("Patient Analysis", 
                 style={'textAlign': 'center', 'fontFamily': 'Arial, sans-serif'}),
         
-        html.P("Analyze metrics across time and services. Brush over charts to filter.",
-               style={'textAlign': 'center', 'color': '#555'}),
-
         dcc.Store(id='d1-global-metric-brush', data=[]),
         dcc.Store(id='d1-time-selection', data=None),
         dcc.Store(id='d1-pcp-brush-store', data={}),
@@ -133,11 +129,13 @@ def create_layout(df):
                 ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top', 'paddingLeft': '4%'}),
             ]),
              
-            # Reset Button
+            # Reset Buttons
             html.Div([
-                html.Button("Reset All Filters", id="d1-reset-selection-btn", n_clicks=0, 
-                            style={'cursor':'pointer', 'padding': '5px 15px', 'marginTop': '15px'}),
-            ], style={'textAlign': 'center'})
+                html.Button("Reset Selection", id="d1-reset-selection-btn", n_clicks=0, 
+                            style={'cursor':'pointer', 'padding': '8px 20px', 'marginRight': '10px'}),
+                html.Button("Reset All Filters", id="d1-reset-all-btn", n_clicks=0, 
+                            style={'cursor':'pointer', 'padding': '8px 20px', 'marginLeft': '10px'}),
+            ], style={'textAlign': 'center', 'marginTop': '15px'})
 
         ], style={'width': '90%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '20px'}),
 
@@ -462,7 +460,7 @@ def register_callbacks(app, df):
 
         return charts
 
-    # Reset button
+    # Reset buttons callback
     @app.callback(
         [Output('d1-global-metric-brush', 'data', allow_duplicate=True),
          Output('d1-time-selection', 'data', allow_duplicate=True),
@@ -470,11 +468,20 @@ def register_callbacks(app, df):
          Output('d1-time-granularity', 'value'),
          Output('d1-event-filter', 'value'),
          Output('d1-service-filter', 'value')],
-        Input('d1-reset-selection-btn', 'n_clicks'),
+        [Input('d1-reset-selection-btn', 'n_clicks'),
+         Input('d1-reset-all-btn', 'n_clicks')],
         prevent_initial_call=True
     )
-    def reset_all_selections(n_clicks):
-        if n_clicks:
-            return [], None, {}, 'weekly', all_events_callback, FIXED_SERVICES
-        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+    def handle_resets(btn_selection, btn_all):
+        triggered = ctx.triggered_id
+        
+        # Both buttons reset the interactive stores
+        res_stores = [[], None, {}]
+        
+        if triggered == 'd1-reset-all-btn':
+            # Reset everything including filters
+            return res_stores + ['weekly', all_events_callback, FIXED_SERVICES]
+        
+        # Only reset selections/stores
+        return res_stores + [dash.no_update, dash.no_update, dash.no_update]
     

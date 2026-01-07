@@ -1,4 +1,3 @@
-import dash
 from dash import dcc, html, Input, Output, State, ctx, no_update
 import plotly.express as px
 import plotly.graph_objects as go
@@ -10,8 +9,7 @@ from sklearn.preprocessing import StandardScaler
 # Layout
 # ------------------------
 def create_layout(df):
-    # Preprocessing specific to this diagram (if not in loader)
-    # Ensure occupancy_rate exists (loader has it, but let's be safe or use it)
+    # Preprocessing
     if 'occupancy_rate' not in df.columns:
         df['occupancy_rate'] = df.apply(
             lambda x: (x['patients_admitted'] / x['available_beds']) * 100 if x['available_beds'] > 0 else 0, 
@@ -154,7 +152,7 @@ def register_callbacks(app, df):
          Input('d5-reset-filters-btn', 'n_clicks'),
          Input('d5-clear-selection-btn', 'n_clicks'),
          Input('d5-bubble-chart', 'restyleData'),
-         Input('d5-capacity-drilldown', 'clickData')], # Added input for drilldown interaction
+         Input('d5-capacity-drilldown', 'clickData')],
         [State('d5-bubble-chart', 'figure')]
     )
     def update_dashboard(k, selected_services, selected_events, week_range, focus_cluster, bubble_selected, 
@@ -162,7 +160,7 @@ def register_callbacks(app, df):
         
         triggered_id = ctx.triggered_id
         
-        # Default return values for controls (no change)
+        # Default return values for controls
         ret_services = no_update
         ret_events = no_update
         ret_weeks = no_update
@@ -259,7 +257,7 @@ def register_callbacks(app, df):
         # 3. Apply Interactive Filters (Selection, Focus, Legend)
         # ----------------------------------------------------
         
-        # Determine Visible Clusters from Legend (restyleData)
+        # Determine Visible Clusters from Legend
         visible_clusters = set([str(i) for i in range(k)])
         
         if current_figure and triggered_id != 'd5-k-slider' and triggered_id != 'd5-reset-filters-btn':

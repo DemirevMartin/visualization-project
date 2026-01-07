@@ -1,7 +1,6 @@
 from dash import dcc, html, Input, Output, State, ctx
 import plotly.graph_objects as go
 import plotly.express as px
-import pandas as pd
 import numpy as np
 from plotly.subplots import make_subplots
 
@@ -26,9 +25,7 @@ SERVICE_LABELS = {
 # HELPER FUNCTIONS
 # ===========================
 def create_view1(df, selected_weeks=None, selected_services=None):
-    """4-panel view with week/service linking"""
-    
-    # We work on a copy to avoid SettingWithCopy on the original df
+    # Use a copy to avoid SettingWithCopy on the original df
     df = df.copy()
 
     if selected_weeks is not None and len(selected_weeks) > 0:
@@ -120,7 +117,6 @@ def create_view1(df, selected_weeks=None, selected_services=None):
                 )
 
     # BOTTOM-LEFT: Department Performance
-    # Use 'avg_satisfaction' if available (from loader), or compute if missing
     if 'avg_satisfaction' in df.columns:
         dept_avg = df.groupby('service').agg({'patient_satisfaction': 'mean', 'avg_satisfaction': 'mean'}).reset_index()
     else:
@@ -203,14 +199,8 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
     # Filter columns to only what we need to avoid issues
     df = df.copy()
     
-    # Handle column naming differences (loader.py vs independent script)
-    # loader uses 'nursing_assistant', script used 'nursing assistant'. 
-    # We will standardize on 'nursing_assistant' for computation, but label nicely.
     if 'nursing_assistant' not in df.columns and 'nursing assistant' in df.columns:
         df['nursing_assistant'] = df['nursing assistant']
-    elif 'nursing_assistant' in df.columns and 'nursing assistant' not in df.columns:
-        # Just to be safe if some logic relies on space
-        df['nursing assistant'] = df['nursing_assistant']
 
     df = df[(df['week'] >= week_start) & (df['week'] <= week_end) & (df['service'].isin(selected_services))]
 
@@ -224,14 +214,13 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
 
     if view_mode == 'role':
         # Grouping
-        # Note: using 'nursing_assistant' (underscore)
         df_agg = df.groupby('week', as_index=False).agg({
             'doctor': 'sum', 'nurse': 'sum', 'nursing_assistant': 'sum', 'patients_admitted': 'sum'
         }).sort_values('week')
 
         roles = ['doctor', 'nurse', 'nursing_assistant']
         role_labels = {'doctor': 'Doctor', 'nurse': 'Nurse', 'nursing_assistant': 'Nursing Assistant'}
-        colors = ['#636EFA', '#EF553B', '#00CC96']
+        colors = ["#D5E925", "#FF0000", "#0004FF"]
 
         for i, role in enumerate(roles):
             fig.add_trace(
@@ -284,22 +273,55 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
 # LAYOUT
 # ===========================
 def create_layout(df):
-    
     # Preprocessing or checking if columns like 'doctor', 'nurse', 'nursing_assistant' exist
-    # (data loading is handled by loader.py, so df should be ready)
-    
+    # data loading is handled by loader.py, so df should be ready
     all_services = sorted(df['service'].unique())
     service_options = [{'label': SERVICE_LABELS.get(s, s.capitalize()), 'value': s} for s in all_services]
-    event_options = [{'label': e.capitalize(), 'value': e} for e in sorted(df['event'].astype(str).unique())]
+    event_options = [{'label': e.capitalize(), 'value': e} for e in sorted(df['event'].astype(str).unique()) if e != 'nan']
     min_week = df['week'].min()
     max_week = df['week'].max()
 
     return html.Div([
         html.H1("Hospital Staff Analysis", 
                 style={'textAlign': 'center', 'fontFamily': 'Arial, sans-serif'}),
-        
-        html.P("Comprehensive analysis of staff performance, satisfaction, and allocation.",
-               style={'textAlign': 'center', 'color': '#555'}),
+
+        # ========== FILTERS ==========
+        html.Div([
+            html.Div([
+                html.Div([
+                    html.Label("Services:", style={'fontWeight': 'bold'}),
+                    dcc.Dropdown(id='filter-services', options=service_options, value=all_services, multi=True),
+                ], style={'flex': '1', 'padding': '10px', 'minWidth': '200px'}),
+                
+                html.Div([
+                    html.Label("Events:", style={'fontWeight': 'bold'}),
+                    dcc.Dropdown(id='filter-events', options=event_options, value=None, multi=True, placeholder="All events"),
+                ], style={'flex': '1', 'padding': '10px', 'minWidth': '200px'}),
+                
+                html.Div([
+                    html.Label("View Mode (Allocation):", style={'fontWeight': 'bold'}),
+                    dcc.RadioItems(id='filter-view-mode',
+                                  options=[{'label': ' By Role', 'value': 'role'},
+                                          {'label': ' By Service', 'value': 'service'}],
+                                  value='role', inline=True, style={'marginTop': '5px'}),
+                ], style={'flex': '0.5', 'padding': '10px', 'minWidth': '200px', 'textAlign': 'center'}),
+            ], style={'display': 'flex', 'flexWrap': 'wrap', 'justifyContent': 'center'}),
+            
+            html.Div([
+                html.Label("Week Range:", style={'fontWeight': 'bold'}),
+                dcc.RangeSlider(id='filter-week-slider', min=min_week, max=max_week,
+                               value=[min_week, max_week], 
+                               marks={int(i): str(int(i)) for i in range(int(min_week), int(max_week) + 1)}, 
+                               step=1,
+                               tooltip={"placement": "bottom", "always_visible": False}),
+            ], style={'padding': '10px', 'marginTop': '10px'}),
+            
+            html.Div([
+                html.Button("Reset All Filters", id='filter-reset', n_clicks=0,
+                           style={'cursor':'pointer', 'padding': '8px 20px', 'marginTop': '10px'})
+            ], style={'textAlign': 'center'})
+
+        ], style={'width': '95%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '30px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.05)'}),
 
         # ========== View 1 ==========
         html.Div([
@@ -307,30 +329,6 @@ def create_layout(df):
                     style={'color': '#2c3e50', 'borderBottom': '3px solid #3498db', 'paddingBottom': '10px'}),
             
             dcc.Store(id='dash1-store', data=None),
-            
-            # Control Panel
-            html.Div([
-                html.Div([
-                    html.Label("Services:", style={'fontWeight': 'bold'}),
-                    dcc.Dropdown(id='dash1-services', options=service_options, value=all_services, multi=True),
-                ], style={'width': '100%', 'marginBottom': '20px'}),
-                
-                html.Div([
-                    html.Label("Week Range:", style={'fontWeight': 'bold'}),
-                    dcc.RangeSlider(id='dash1-week-slider', min=min_week, max=max_week,
-                                   value=[min_week, max_week], 
-                                   marks={i: str(i) for i in range(min_week, max_week + 1)}, 
-                                   step=1,
-                                   tooltip={"placement": "bottom", "always_visible": False}),
-                ], style={'width': '100%', 'display': 'block', 'marginTop': '20px'}),
-                
-                html.Div([
-                    html.Button("Reset All Filters", id='dash1-reset', n_clicks=0,
-                               style={'cursor':'pointer', 'padding': '5px 15px', 'marginTop': '15px'})
-                ], style={'textAlign': 'center'})
-
-            ], style={'width': '95%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '20px'}),
-            
             html.Div(id='dash1-status'),
             dcc.Graph(id='dash1-graph', config={'displayModeBar': True, 'modeBarButtonsToAdd': ['select2d', 'lasso2d']}),
         ], style={'marginBottom': '40px', 'padding': '20px', 'backgroundColor': '#ffffff', 
@@ -340,43 +338,6 @@ def create_layout(df):
         html.Div([
             html.H3("Staff Allocation Timeline", 
                     style={'color': '#2c3e50', 'borderBottom': '3px solid #2ecc71', 'paddingBottom': '10px'}),
-            
-            # Control Panel
-            html.Div([
-                html.Div([
-                    html.Label("View Mode:", style={'fontWeight': 'bold'}),
-                    dcc.RadioItems(id='dash2-view-mode',
-                                  options=[{'label': ' By Role', 'value': 'role'},
-                                          {'label': ' By Service', 'value': 'service'}],
-                                  value='role', inline=True, style={'marginTop': '5px'}),
-                ], style={'width': '20%', 'display': 'inline-block', 'paddingRight': '2%', 'verticalAlign': 'top'}),
-                
-                html.Div([
-                    html.Label("Service(s):", style={'fontWeight': 'bold'}),
-                    dcc.Dropdown(id='dash2-services', options=service_options, value=['emergency'], 
-                                multi=True, clearable=False),
-                ], style={'width': '35%', 'display': 'inline-block', 'paddingRight': '2%', 'verticalAlign': 'top'}),
-                
-                html.Div([
-                    html.Label("Events:", style={'fontWeight': 'bold'}),
-                    dcc.Dropdown(id='dash2-events', options=event_options, value=None, multi=True, placeholder="All events"),
-                ], style={'width': '35%', 'display': 'inline-block', 'verticalAlign': 'top'}),
-
-                html.Div([
-                    html.Label("Week Range:", style={'fontWeight': 'bold'}),
-                    dcc.RangeSlider(id='dash2-week-slider', min=min_week, max=max_week,
-                                   value=[min_week, max_week],
-                                   marks={int(i): str(int(i)) for i in df['week'].unique()}, step=1,
-                                   tooltip={"placement": "bottom", "always_visible": False}),
-                ], style={'marginTop': '20px'}),
-
-                 # Reset Button
-                html.Div([
-                    html.Button("Reset All Filters", id='dash2-reset', n_clicks=0,
-                               style={'cursor':'pointer', 'padding': '5px 15px', 'marginTop': '15px'})
-                ], style={'textAlign': 'center'})
-
-            ], style={'width': '95%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '20px'}),
             
             dcc.Graph(id='dash2-graph', config={'displayModeBar': True}),
         ], style={'padding': '20px', 'backgroundColor': '#ffffff', 
@@ -388,19 +349,28 @@ def create_layout(df):
 # CALLBACKS
 # ===========================
 def register_callbacks(app, df):
-    
-    # We can capture df in the closure for these callbacks
-    # Or ensure create_view functions use the df passed here.
     min_week = df['week'].min()
     max_week = df['week'].max()
     all_services = sorted(df['service'].unique())
     
-    # CALLBACKS - VIEW 1
+    # CALLBACK: RESET FILTERS
     @app.callback(
-        [Output('dash1-graph', 'figure'), Output('dash1-store', 'data'),
-         Output('dash1-services', 'value'), Output('dash1-week-slider', 'value')],
-        [Input('dash1-week-slider', 'value'), Input('dash1-services', 'value'),
-         Input('dash1-graph', 'clickData'), Input('dash1-graph', 'selectedData'), Input('dash1-reset', 'n_clicks')],
+        [Output('filter-services', 'value'),
+         Output('filter-week-slider', 'value'),
+         Output('filter-events', 'value'),
+         Output('filter-view-mode', 'value')],
+        [Input('filter-reset', 'n_clicks')],
+        prevent_initial_call=True
+    )
+    def reset_filters(n_clicks):
+        return all_services, [min_week, max_week], None, 'role'
+
+    # CALLBACK: VIEW 1
+    @app.callback(
+        [Output('dash1-graph', 'figure'), Output('dash1-store', 'data')],
+        [Input('filter-week-slider', 'value'), Input('filter-services', 'value'),
+         Input('dash1-graph', 'clickData'), Input('dash1-graph', 'selectedData'),
+         Input('filter-reset', 'n_clicks')],
         [State('dash1-store', 'data')]
     )
     def update_dash1(weeks, services, click_data, selected_data, reset_clicks, current_state):
@@ -409,18 +379,10 @@ def register_callbacks(app, df):
         
         triggered = ctx.triggered_id
         
-        # Default return values for inputs (no update)
-        ret_services = services
-        ret_weeks = weeks
-
-        if triggered == 'dash1-reset' and reset_clicks:
+        if triggered == 'filter-reset':
             current_state = {'selected_weeks': None, 'selected_services': None}
-            ret_services = all_services
-            ret_weeks = [min_week, max_week]
-            
-        elif triggered in ['dash1-week-slider', 'dash1-services']:
+        elif triggered in ['filter-week-slider', 'filter-services']:
             current_state = {'selected_weeks': None, 'selected_services': None}
-        
         elif triggered == 'dash1-graph' and click_data:
             if 'points' in click_data and len(click_data['points']) > 0:
                 point = click_data['points'][0]
@@ -432,34 +394,29 @@ def register_callbacks(app, df):
                     except (ValueError, TypeError):
                         service = custom[0]
                         current_state['selected_services'] = None if current_state['selected_services'] == [service] else [service]
-        
         elif triggered == 'dash1-graph' and selected_data:
             if 'points' in selected_data:
                 weeks_list = [int(p['customdata'][0]) for p in selected_data['points'] 
                              if 'customdata' in p and p.get('curveNumber', 0) < 16]
                 current_state['selected_weeks'] = sorted(list(set(weeks_list))) if weeks_list else None
-        
-        curr_services = ret_services if ret_services else []
-        curr_weeks = ret_weeks if ret_weeks else [min_week, max_week]
 
-        # Filter logic using current values
-        if not curr_services:
-            return go.Figure(), current_state, ret_services, ret_weeks
+        if not services:
+            return go.Figure(), current_state
         
-        mask = (df['week'] >= curr_weeks[0]) & (df['week'] <= curr_weeks[1]) & (df['service'].isin(curr_services))
+        mask = (df['week'] >= weeks[0]) & (df['week'] <= weeks[1]) & (df['service'].isin(services))
         filtered_df = df[mask].copy()
         
         if filtered_df.empty:
-            return go.Figure(), current_state, ret_services, ret_weeks
+            return go.Figure(), current_state
         
         fig = create_view1(filtered_df, current_state['selected_weeks'], current_state['selected_services'])
-        return fig, current_state, ret_services, ret_weeks
+        return fig, current_state
 
     @app.callback(
         Output('dash1-status', 'children'),
         Input('dash1-store', 'data')
     )
-    def update_dash1_status(state):
+    def update_view1_status(state):
         if state is None or (not state.get('selected_weeks') and not state.get('selected_services')):
             return html.Div("Showing all data", style={'padding': '8px', 'backgroundColor': '#ecf0f1', 
                                                         'borderRadius': '5px', 'marginBottom': '10px', 'fontSize': '14px'})
@@ -476,25 +433,18 @@ def register_callbacks(app, df):
         return html.Div(parts, style={'padding': '10px', 'backgroundColor': '#fff3cd', 'borderRadius': '5px', 
                                       'marginBottom': '10px', 'border': '1px solid #ffc107'})
 
-    # CALLBACKS - VIEW 2
+    # CALLBACK: VIEW 2
     @app.callback(
-        [Output('dash2-graph', 'figure'),
-         Output('dash2-view-mode', 'value'),
-         Output('dash2-services', 'value'),
-         Output('dash2-events', 'value'),
-         Output('dash2-week-slider', 'value')],
-        [Input('dash2-view-mode', 'value'), Input('dash2-services', 'value'), Input('dash2-events', 'value'),
-         Input('dash2-week-slider', 'value'), Input('dash2-graph', 'hoverData'), Input('dash2-reset', 'n_clicks')]
+        Output('dash2-graph', 'figure'),
+        [Input('filter-view-mode', 'value'), 
+         Input('filter-services', 'value'), 
+         Input('filter-events', 'value'),
+         Input('filter-week-slider', 'value'), 
+         Input('dash2-graph', 'hoverData')]
     )
-    def update_dash2(view_mode, services, events, weeks, hover_data, reset_clicks):
-        triggered = ctx.triggered_id
-        
-        if triggered == 'dash2-reset':
-            view_mode = 'role'
-            services = ['emergency']
-            events = None
-            weeks = [min_week, max_week]
+    def update_view2(view_mode, services, events, weeks, hover_data):
+        if not services:
+            return go.Figure()
             
         fig = create_view2(df, view_mode, services, events, weeks, hover_data)
-        
-        return fig, view_mode, services, events, weeks
+        return fig
