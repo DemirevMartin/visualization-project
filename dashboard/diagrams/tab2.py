@@ -1,167 +1,489 @@
+from dash import dcc, html, Input, Output, State, ctx
 import plotly.graph_objects as go
 import plotly.express as px
-from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
-from dash import html, dcc
-from scipy.stats import pearsonr
+from plotly.subplots import make_subplots
 
-def create_splom_view(df):
-    """
-    Creates the Scatter Plot Matrix (SPLOM) for Task 3.
-    """
-    splom_vars = [
-        'staff_present', 'presence_rate', 'patient_satisfaction', 
-        'avg_satisfaction', 'avg_los', 'staff_morale', 
-        'patients_refused', 'workload'
-    ]
+# ===========================
+# CONSTANTS
+# ===========================
+SERVICE_COLORS = {
+    'emergency': '#d62728',
+    'ICU': '#ff7f0e',
+    'surgery': '#2ca02c',
+    'general_medicine': '#1f77b4'
+}
+
+SERVICE_LABELS = {
+    'emergency': 'Emergency',
+    'ICU': 'ICU',
+    'surgery': 'Surgery',
+    'general_medicine': 'General Medicine'
+}
+
+# ===========================
+# HELPER FUNCTIONS
+# ===========================
+def create_view1(df, selected_weeks=None, selected_services=None):
+    """4-panel view with week/service linking"""
     
-    # Filter only existing columns
-    valid_vars = [v for v in splom_vars if v in df.columns]
-    splom_data = df[valid_vars + ['service']].dropna()
+    # We work on a copy to avoid SettingWithCopy on the original df
+    df = df.copy()
 
-    dimensions = []
-    var_labels = {
-        'staff_present': 'Staff Count',
-        'presence_rate': 'Presence %',
-        'patient_satisfaction': 'Sat (Svc)', 
-        'avg_satisfaction': 'Sat (Pt)',
-        'avg_los': 'LOS',
-        'staff_morale': 'Morale',
-        'patients_refused': 'Refusals',
-        'workload': 'Workload'
-    }
+    if selected_weeks is not None and len(selected_weeks) > 0:
+        df['week_selected'] = df['week'].isin(selected_weeks)
+    else:
+        df['week_selected'] = True
 
-    for var in valid_vars:
-        dimensions.append(dict(label=var_labels.get(var, var), values=splom_data[var]))
+    if selected_services is not None and len(selected_services) > 0:
+        df['service_selected'] = df['service'].isin(selected_services)
+    else:
+        df['service_selected'] = True
 
-    # Map colors
-    service_map = {s: i for i, s in enumerate(sorted(df['service'].unique()))}
-    splom_data['service_id'] = splom_data['service'].map(service_map)
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=['Staff Presence vs Satisfaction', 'Workload Pressure vs Satisfaction',
+                       'Department Performance', 'Service Overview'],
+        specs=[[{"type": "scatter"}, {"type": "scatter"}], [{"type": "bar"}, {"type": "scatter"}]],
+        vertical_spacing=0.18, horizontal_spacing=0.15
+    )
+
+    # TOP-LEFT: Presence vs Satisfaction
+    for service, color in SERVICE_COLORS.items():
+        service_data = df[df['service'] == service].copy()
+        if len(service_data) == 0:
+            continue
+
+        selected = service_data[service_data['week_selected']]
+        not_selected = service_data[~service_data['week_selected']]
+
+        if len(not_selected) > 0:
+            fig.add_trace(
+                go.Scatter(
+                    x=not_selected['presence_rate'] * 100, y=not_selected['patient_satisfaction'],
+                    mode='markers', name=SERVICE_LABELS[service],
+                    marker=dict(color=color, size=8, opacity=0.2),
+                    customdata=np.column_stack((not_selected['week'], not_selected['service'])),
+                    hovertemplate='<b>%{customdata[1]}</b><br>Week: %{customdata[0]}<br>Presence: %{x:.1f}%<br>Satisfaction: %{y:.1f}<extra></extra>',
+                    legendgroup=service, showlegend=False
+                ),
+                row=1, col=1
+            )
+        
+        if len(selected) > 0:
+            fig.add_trace(
+                go.Scatter(
+                    x=selected['presence_rate'] * 100, y=selected['patient_satisfaction'],
+                    mode='markers', name=SERVICE_LABELS[service],
+                    marker=dict(color=color, size=18, opacity=1.0, line=dict(width=3, color='white')),
+                    customdata=np.column_stack((selected['week'], selected['service'])),
+                    hovertemplate='<b>%{customdata[1]}</b><br>Week: %{customdata[0]}<br>Presence: %{x:.1f}%<br>Satisfaction: %{y:.1f}<extra></extra>',
+                    legendgroup=service, showlegend=True
+                ),
+                row=1, col=1
+            )
+
+    # TOP-RIGHT: Workload vs Satisfaction
+    if 'patients_per_staff' in df.columns:
+        workload_data = df[df['patients_per_staff'] < 15].copy()
+        for service, color in SERVICE_COLORS.items():
+            service_data = workload_data[workload_data['service'] == service]
+            if len(service_data) == 0:
+                continue
+            
+            selected = service_data[service_data['week_selected']]
+            not_selected = service_data[~service_data['week_selected']]
+            
+            if len(not_selected) > 0:
+                fig.add_trace(
+                    go.Scatter(
+                        x=not_selected['patients_per_staff'], y=not_selected['patient_satisfaction'],
+                        mode='markers', marker=dict(color=color, size=8, opacity=0.2),
+                        customdata=np.column_stack((not_selected['week'], not_selected['service'])),
+                        hovertemplate='<b>%{customdata[1]}</b><br>Week: %{customdata[0]}<br>Workload: %{x:.1f}<br>Sat: %{y:.1f}<extra></extra>',
+                        legendgroup=service, showlegend=False
+                    ),
+                    row=1, col=2
+                )
+            
+            if len(selected) > 0:
+                fig.add_trace(
+                    go.Scatter(
+                        x=selected['patients_per_staff'], y=selected['patient_satisfaction'],
+                        mode='markers', marker=dict(color=color, size=18, opacity=1.0, line=dict(width=3, color='white')),
+                        customdata=np.column_stack((selected['week'], selected['service'])),
+                        hovertemplate='<b>%{customdata[1]}</b><br>Week: %{customdata[0]}<br>Workload: %{x:.1f}<br>Sat: %{y:.1f}<extra></extra>',
+                        legendgroup=service, showlegend=False
+                    ),
+                    row=1, col=2
+                )
+
+    # BOTTOM-LEFT: Department Performance
+    # Use 'avg_satisfaction' if available (from loader), or compute if missing
+    if 'avg_satisfaction' in df.columns:
+        dept_avg = df.groupby('service').agg({'patient_satisfaction': 'mean', 'avg_satisfaction': 'mean'}).reset_index()
+    else:
+         dept_avg = df.groupby('service').agg({'patient_satisfaction': 'mean'}).reset_index()
+         dept_avg['avg_satisfaction'] = dept_avg['patient_satisfaction']
+         
+    dept_avg.columns = ['service', 'service_satisfaction', 'patient_satisfaction']
+    dept_avg = dept_avg.sort_values('service_satisfaction', ascending=True)
     
-    # Use distinct colors
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+    for _, row in dept_avg.iterrows():
+        service = row['service']
+        color = SERVICE_COLORS.get(service, '#7f8c8d')
+        is_selected = (selected_services is None or len(selected_services) == 0 or service in selected_services)
+        service_label = SERVICE_LABELS.get(service, service.replace('_', ' ').title())
+        
+        fig.add_trace(
+            go.Bar(
+                y=[service_label], x=[row['service_satisfaction']], orientation='h',
+                marker=dict(color=color, opacity=1.0 if is_selected else 0.3),
+                text=[f"{row['service_satisfaction']:.1f}"], textposition='inside', textfont=dict(size=14, color='white'),
+                legendgroup=service, showlegend=False,
+                hovertemplate=f'<b>{service_label}</b><br>Avg: %{{x:.1f}}<extra></extra>',
+                customdata=[[service]]
+            ),
+            row=2, col=1
+        )
 
-    fig = go.Figure(data=go.Parcoords(
-        line=dict(
-            color=splom_data['service_id'],
-            colorscale=[[i/(len(service_map)-1 or 1), c] for i, c in enumerate(colors[:len(service_map)])],
-            showscale=True,
-            colorbar=dict(title='Service', tickvals=list(service_map.values()), ticktext=list(service_map.keys()))
-        ),
-        dimensions=dimensions
-    ))
+    # BOTTOM-RIGHT: Service Overview
+    service_summary = df.groupby('service').agg({
+        'presence_rate': 'mean', 'patient_satisfaction': 'mean', 'patients_per_staff': 'mean'
+    }).reset_index()
+
+    for _, row in service_summary.iterrows():
+        service = row['service']
+        color = SERVICE_COLORS.get(service, '#7f8c8d')
+        is_selected = (selected_services is None or len(selected_services) == 0 or service in selected_services)
+        bubble_size = 25 + (row['patients_per_staff'] * 5)
+        
+        fig.add_trace(
+            go.Scatter(
+                x=[row['presence_rate'] * 100], y=[row['patient_satisfaction']],
+                mode='markers+text',
+                marker=dict(color=color, size=bubble_size if is_selected else bubble_size * 0.5, opacity=1.0 if is_selected else 0.3),
+                text=[SERVICE_LABELS.get(service, service)] if is_selected else [''],
+                textposition='top center', textfont=dict(size=15, color=color),
+                legendgroup=service, showlegend=False,
+                hovertemplate=f'<b>{SERVICE_LABELS.get(service, service)}</b><br>Presence: %{{x:.1f}}%<br>Satisfaction: %{{y:.1f}}<extra></extra>',
+                customdata=[[service]]
+            ),
+            row=2, col=2
+        )
+
+    fig.update_xaxes(title_text="Staff Presence Rate (%)", row=1, col=1, range=[0, 105], title_font=dict(size=16), tickfont=dict(size=14))
+    fig.update_xaxes(title_text="Patients per Staff", row=1, col=2, range=[0, 15], title_font=dict(size=16), tickfont=dict(size=14))
+    fig.update_xaxes(title_text="Average Satisfaction", row=2, col=1, range=[0, 105], title_font=dict(size=16), tickfont=dict(size=14))
+    fig.update_xaxes(title_text="Average Presence Rate (%)", row=2, col=2, title_font=dict(size=16), tickfont=dict(size=14))
+    
+    fig.update_yaxes(title_text="Patient Satisfaction", row=1, col=1, range=[0, 105], title_font=dict(size=16), tickfont=dict(size=14))
+    fig.update_yaxes(title_text="Patient Satisfaction", row=1, col=2, range=[0, 105], title_font=dict(size=16), tickfont=dict(size=14))
+    fig.update_yaxes(title_text="Department", row=2, col=1, tickfont=dict(size=14), title_font=dict(size=16))
+    fig.update_yaxes(title_text="Average Satisfaction", row=2, col=2, title_font=dict(size=16), tickfont=dict(size=14))
+    
+    for i in fig['layout']['annotations']:
+        i['font'] = dict(size=20)
 
     fig.update_layout(
-        title="<b>Multivariate Staffing Analysis (Parallel Coordinates)</b>",
-        height=600,
-        margin=dict(l=60, r=60, t=80, b=40)
+        height=1000,
+        title_text="<b>View 1: Staff Performance Analysis</b><br><sub>TOP panels linked by WEEK | BOTTOM panels linked by SERVICE</sub>",
+        title_font=dict(size=22),
+        template='plotly_white', showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5, font=dict(size=14)),
+        hovermode='closest'
     )
     
-    # Insights
-    corr_staff_sat = df[['staff_present', 'patient_satisfaction']].corr().iloc[0,1]
+    return fig
+
+def create_view2(df, view_mode, selected_services, selected_events, selected_weeks, hoverData):
+    """Temporal staff allocation view"""
     
-    insights = html.Div([
-        html.H4("Key SPLOM Insights:"),
-        html.Ul([
-            html.Li(f"Staff Presence vs Satisfaction correlation: r = {corr_staff_sat:.3f}"),
-            html.Li("Use the interactive axes above to filter ranges and see connections across metrics.")
-        ])
+    if isinstance(selected_services, str):
+        selected_services = [selected_services]
+
+    week_start, week_end = selected_weeks
+    # Filter columns to only what we need to avoid issues
+    df = df.copy()
+    
+    # Handle column naming differences (loader.py vs independent script)
+    # loader uses 'nursing_assistant', script used 'nursing assistant'. 
+    # We will standardize on 'nursing_assistant' for computation, but label nicely.
+    if 'nursing_assistant' not in df.columns and 'nursing assistant' in df.columns:
+        df['nursing_assistant'] = df['nursing assistant']
+    elif 'nursing_assistant' in df.columns and 'nursing assistant' not in df.columns:
+        # Just to be safe if some logic relies on space
+        df['nursing assistant'] = df['nursing_assistant']
+
+    df = df[(df['week'] >= week_start) & (df['week'] <= week_end) & (df['service'].isin(selected_services))]
+
+    if selected_events:
+        df = df[df['event'].isin(selected_events)]
+
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1,
+        subplot_titles=("Staff Allocation", "Patients Admitted")
+    )
+
+    if view_mode == 'role':
+        # Grouping
+        # Note: using 'nursing_assistant' (underscore)
+        df_agg = df.groupby('week', as_index=False).agg({
+            'doctor': 'sum', 'nurse': 'sum', 'nursing_assistant': 'sum', 'patients_admitted': 'sum'
+        }).sort_values('week')
+
+        roles = ['doctor', 'nurse', 'nursing_assistant']
+        role_labels = {'doctor': 'Doctor', 'nurse': 'Nurse', 'nursing_assistant': 'Nursing Assistant'}
+        colors = ['#636EFA', '#EF553B', '#00CC96']
+
+        for i, role in enumerate(roles):
+            fig.add_trace(
+                go.Bar(x=df_agg['week'], y=df_agg[role], name=role_labels[role], marker_color=colors[i]),
+                row=1, col=1
+            )
+
+        fig.add_trace(
+            go.Scatter(x=df_agg['week'], y=df_agg['patients_admitted'],
+                      name='Patients Admitted', mode='lines+markers', line=dict(color='black', width=3)),
+            row=2, col=1
+        )
+        title_suffix = " + ".join([s.capitalize() for s in selected_services])
+
+    else:
+        colors = px.colors.qualitative.Set2
+        for i, srv in enumerate(selected_services):
+            df_srv = df[df['service'] == srv].sort_values('week')
+            # Sum roles to get total staff
+            staff_total = df_srv['doctor'] + df_srv['nurse'] + df_srv['nursing_assistant']
+
+            fig.add_trace(
+                go.Bar(x=df_srv['week'], y=staff_total, name=srv.capitalize(), marker_color=colors[i % len(colors)]),
+                row=1, col=1
+            )
+            fig.add_trace(
+                go.Scatter(x=df_srv['week'], y=df_srv['patients_admitted'],
+                          name=f"{srv.capitalize()} Patients", mode='lines+markers'),
+                row=2, col=1
+            )
+        title_suffix = " vs ".join([s.capitalize() for s in selected_services])
+
+    if hoverData and 'points' in hoverData:
+        week = hoverData['points'][0]['x']
+        fig.add_vrect(x0=week - 0.5, x1=week + 0.5, fillcolor="rgba(200,200,200,0.3)", line_width=0, layer="below")
+
+    fig.update_layout(
+        title=f"<b>View 2: Staff Allocation Timeline</b><br><sub>{title_suffix}</sub>",
+        barmode='stack', height=600, legend=dict(orientation="h", y=1.08),
+        template='plotly_white'
+    )
+    fig.update_xaxes(title_text="Week", row=2, col=1)
+    fig.update_yaxes(title_text="Staff Count", row=1, col=1)
+    fig.update_yaxes(title_text="Patients Admitted", row=2, col=1)
+
+    return fig
+
+
+# ===========================
+# LAYOUT
+# ===========================
+def create_layout(df):
+    
+    # Preprocessing or checking if columns like 'doctor', 'nurse', 'nursing_assistant' exist
+    # (data loading is handled by loader.py, so df should be ready)
+    
+    all_services = sorted(df['service'].unique())
+    service_options = [{'label': SERVICE_LABELS.get(s, s.capitalize()), 'value': s} for s in all_services]
+    event_options = [{'label': e.capitalize(), 'value': e} for e in sorted(df['event'].astype(str).unique())]
+    min_week = df['week'].min()
+    max_week = df['week'].max()
+
+    return html.Div([
+        html.H1("Staffing & Resource Analysis", 
+                style={'textAlign': 'center', 'fontFamily': 'Arial, sans-serif'}),
+        
+        html.P("Analyze staffing levels across services, correlate performance with workload, and track resource allocation over time.",
+               style={'textAlign': 'center', 'color': '#666', 'marginBottom': '30px'}),
+
+        # ========== View 1 ==========
+        # Wrapper for View 1
+        html.Div([
+            html.H3("View 1: Staff Performance & Satisfaction Analysis", style={'textAlign': 'center', 'fontSize': '24px', 'marginTop': '20px'}),
+
+            dcc.Store(id='dash1-store', data=None),
+
+            # Control Panel View 1
+            html.Div([
+                html.Div([
+                    html.Div([
+                        html.Label("Services:", style={'fontWeight': 'bold'}),
+                        dcc.Dropdown(id='dash1-services', options=service_options, value=all_services, multi=True),
+                    ], style={'width': '100%', 'marginBottom': '20px'}),
+                ]),
+
+                html.Div([
+                    html.Label("Week Range:", style={'fontWeight': 'bold'}),
+                    dcc.RangeSlider(id='dash1-week-slider', min=min_week, max=max_week,
+                                   value=[min_week, max_week], 
+                                   marks={i: str(i) for i in range(min_week, max_week + 1)}, 
+                                   step=1,
+                                   tooltip={"placement": "bottom", "always_visible": False}),
+                ], style={'width': '100%', 'marginTop': '20px'}),
+                
+                html.Div([
+                    html.Button("Reset View 1", id='dash1-reset', n_clicks=0,
+                           style={'cursor':'pointer', 'padding': '5px 15px'})
+                ], style={'textAlign': 'center', 'marginTop': '25px'}),
+            ], style={'width': '90%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '20px'}),
+            
+            html.Div(id='dash1-status', style={'textAlign': 'center', 'marginBottom': '10px'}),
+            dcc.Graph(id='dash1-graph', config={'displayModeBar': True, 'modeBarButtonsToAdd': ['select2d', 'lasso2d']}),
+        ], style={'width': '95%', 'margin': '0 auto', 'marginBottom': '50px'}),
+        
+        html.Hr(),
+
+        # ========== View 2 ==========
+        html.Div([
+            html.H3("View 2: Staff Allocation Timeline", style={'textAlign': 'center', 'fontSize': '24px', 'marginTop': '20px'}),
+            
+            # Control Panel View 2
+            html.Div([
+                html.Div([
+                    html.Label("View Mode:", style={'fontWeight': 'bold'}),
+                    dcc.RadioItems(id='dash2-view-mode',
+                                  options=[{'label': ' By Role', 'value': 'role'},
+                                          {'label': ' By Service', 'value': 'service'}],
+                                  value='role', inline=True, style={'marginTop': '5px'}),
+                ], style={'marginBottom': '15px'}),
+                
+                html.Div([
+                    html.Div([
+                        html.Label("Service(s):", style={'fontWeight': 'bold'}),
+                        dcc.Dropdown(id='dash2-services', options=service_options, value=['emergency'], 
+                                    multi=True, clearable=False),
+                    ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top'}),
+                    
+                    html.Div([
+                        html.Label("Events:", style={'fontWeight': 'bold'}),
+                        dcc.Dropdown(id='dash2-events', options=event_options, value=None, multi=True, placeholder="All events"),
+                    ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top', 'paddingLeft': '4%'}),
+                ]),
+                
+                html.Div([
+                    html.Label("Week Range:", style={'fontWeight': 'bold'}),
+                    dcc.RangeSlider(id='dash2-week-slider', min=min_week, max=max_week,
+                                   value=[min_week, max_week],
+                                   marks={int(i): str(int(i)) for i in df['week'].unique()}, step=1,
+                                   tooltip={"placement": "bottom", "always_visible": False}),
+                ], style={'marginTop': '20px'}),
+
+                html.Div([
+                    html.Button("Reset View 2", id='dash2-reset', n_clicks=0,
+                           style={'cursor':'pointer', 'padding': '5px 15px'})
+                ], style={'textAlign': 'center', 'marginTop': '15px'}),
+
+            ], style={'width': '90%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '20px'}),
+            
+            dcc.Graph(id='dash2-graph', config={'displayModeBar': True}),
+        ], style={'width': '95%', 'margin': '0 auto', 'paddingBottom': '50px'}),
     ])
 
-    return dcc.Graph(figure=fig), insights
 
-def create_research_view(df):
-    """
-    Creates the Multi-Panel Research Questions view.
-    """
-    fig = make_subplots(
-        rows=3, cols=3,
-        subplot_titles=(
-            'Presence vs Satisfaction', 'Staff vs LOS', 'Service Sensitivity',
-            'Satisfaction Threshold', 'Condition Impact', 'Role Impact',
-            'Workload Impact', 'Weekly Trends', 'Presence Heatmap'
-        ),
-        vertical_spacing=0.1, horizontal_spacing=0.08
+# ===========================
+# CALLBACKS
+# ===========================
+def register_callbacks(app, df):
+    
+    # We can capture df in the closure for these callbacks
+    # Or ensure create_view functions use the df passed here.
+    
+    # CALLBACKS - VIEW 1
+    @app.callback(
+        [Output('dash1-graph', 'figure'), Output('dash1-store', 'data')],
+        [Input('dash1-week-slider', 'value'), Input('dash1-services', 'value'),
+         Input('dash1-graph', 'clickData'), Input('dash1-graph', 'selectedData'), Input('dash1-reset', 'n_clicks')],
+        [State('dash1-store', 'data')]
     )
+    def update_dash1(weeks, services, click_data, selected_data, reset_clicks, current_state):
+        if current_state is None:
+            current_state = {'selected_weeks': None, 'selected_services': None}
+        
+        triggered = ctx.triggered_id
+        
+        if triggered == 'dash1-reset' and reset_clicks:
+            current_state = {'selected_weeks': None, 'selected_services': None}
+        elif triggered in ['dash1-week-slider', 'dash1-services']:
+            current_state = {'selected_weeks': None, 'selected_services': None}
+        elif triggered == 'dash1-graph' and click_data:
+            if 'points' in click_data and len(click_data['points']) > 0:
+                point = click_data['points'][0]
+                if 'customdata' in point and point['customdata']:
+                    custom = point['customdata']
+                    try:
+                        week = int(custom[0])
+                        current_state['selected_weeks'] = None if current_state['selected_weeks'] == [week] else [week]
+                    except (ValueError, TypeError):
+                        service = custom[0]
+                        current_state['selected_services'] = None if current_state['selected_services'] == [service] else [service]
+        elif triggered == 'dash1-graph' and selected_data:
+            if 'points' in selected_data:
+                weeks_list = [int(p['customdata'][0]) for p in selected_data['points'] 
+                             if 'customdata' in p and p.get('curveNumber', 0) < 16]
+                current_state['selected_weeks'] = sorted(list(set(weeks_list))) if weeks_list else None
+        
+        if not services:
+            return go.Figure(), current_state
+        
+        mask = (df['week'] >= weeks[0]) & (df['week'] <= weeks[1]) & (df['service'].isin(services))
+        filtered_df = df[mask].copy()
+        
+        if filtered_df.empty:
+            return go.Figure(), current_state
+        
+        fig = create_view1(filtered_df, current_state['selected_weeks'], current_state['selected_services'])
+        return fig, current_state
 
-    # Q1: Presence vs Satisfaction
-    if 'presence_category' in df.columns:
-        p_sat = df.groupby('presence_category')['patient_satisfaction'].mean()
-        fig.add_trace(go.Bar(x=p_sat.index.astype(str), y=p_sat.values, marker_color='#3366cc', name='Sat by Presence'), row=1, col=1)
+    @app.callback(
+        Output('dash1-status', 'children'),
+        Input('dash1-store', 'data')
+    )
+    def update_dash1_status(state):
+        if state is None or (not state.get('selected_weeks') and not state.get('selected_services')):
+            return html.Div("Showing all data", style={'padding': '8px', 'backgroundColor': '#ecf0f1', 
+                                                        'borderRadius': '5px', 'marginBottom': '10px', 'fontSize': '14px'})
+        
+        parts = []
+        if state.get('selected_weeks'):
+            weeks = state['selected_weeks']
+            week_text = f"Week {weeks[0]}" if len(weeks) == 1 else f"{len(weeks)} weeks"
+            parts.append(html.Span([html.B("Weeks: "), week_text]))
+        if state.get('selected_services'):
+            services = [SERVICE_LABELS.get(s, s) for s in state['selected_services']]
+            parts.append(html.Span([" | " if parts else "", html.B("Services: "), ', '.join(services)]))
+        
+        return html.Div(parts, style={'padding': '10px', 'backgroundColor': '#fff3cd', 'borderRadius': '5px', 
+                                      'marginBottom': '10px', 'border': '1px solid #ffc107'})
 
-    # Q2: Staff vs LOS
-    fig.add_trace(go.Scatter(x=df['staff_present'], y=df['avg_los'], mode='markers', marker=dict(color='orange', opacity=0.6), name='Staff vs LOS'), row=1, col=2)
+    # CALLBACKS - VIEW 2
+    @app.callback(
+        [Output('dash2-graph', 'figure'),
+         Output('dash2-view-mode', 'value'),
+         Output('dash2-services', 'value'),
+         Output('dash2-events', 'value'),
+         Output('dash2-week-slider', 'value')],
+        [Input('dash2-view-mode', 'value'), Input('dash2-services', 'value'), Input('dash2-events', 'value'),
+         Input('dash2-week-slider', 'value'), Input('dash2-graph', 'hoverData'), Input('dash2-reset', 'n_clicks')]
+    )
+    def update_dash2(view_mode, services, events, weeks, hover_data, reset_clicks):
+        triggered_id = ctx.triggered_id
+        
+        # Default values
+        if triggered_id == 'dash2-reset':
+             view_mode = 'role'
+             services = ['emergency']
+             events = None
+             weeks = [int(df['week'].min()), int(df['week'].max())] # Use min/max from df closure
 
-    # Q3: Service Impact (Well-staffed vs Understaffed)
-    if 'understaffed' in df.columns:
-        impacts = []
-        for s in df['service'].unique():
-            sub = df[df['service'] == s]
-            diff = sub[~sub['understaffed']]['patient_satisfaction'].mean() - sub[sub['understaffed']]['patient_satisfaction'].mean()
-            impacts.append({'service': s, 'diff': diff})
-        imp_df = pd.DataFrame(impacts).sort_values('diff')
-        fig.add_trace(go.Bar(y=imp_df['service'], x=imp_df['diff'], orientation='h', marker_color='teal', name='Impact'), row=1, col=3)
-
-    # Q4: Threshold
-    # (Simplified for brevity)
-    fig.add_trace(go.Scatter(x=df['presence_rate'], y=df['patient_satisfaction'], mode='markers', marker=dict(size=4, color='purple'), name='Threshold'), row=2, col=1)
-
-    # Q5: Condition
-    if 'condition' in df.columns:
-        cond_sat = df.groupby('condition')['patient_satisfaction'].mean().sort_values()
-        fig.add_trace(go.Bar(x=cond_sat.index, y=cond_sat.values, marker_color='crimson', name='Condition'), row=2, col=2)
-
-    # Q6: Role Impact (Correlation)
-    roles = ['doctor', 'nurse', 'nursing_assistant']
-    corrs = []
-    for r in roles:
-        if r in df.columns:
-            c = df[[r, 'patient_satisfaction']].corr().iloc[0,1]
-            corrs.append({'role': r, 'c': c})
-    c_df = pd.DataFrame(corrs)
-    if not c_df.empty:
-        fig.add_trace(go.Bar(x=c_df['role'], y=c_df['c'], marker_color='green', name='Role Corr'), row=2, col=3)
-
-    # Q7: Workload
-    if 'workload' in df.columns:
-        fig.add_trace(go.Scatter(x=df['workload'], y=df['patient_satisfaction'], mode='markers', marker=dict(color='brown'), name='Workload'), row=3, col=1)
-
-    # Q8: Weekly Trend
-    daily = df.groupby('week')[['patient_satisfaction', 'presence_rate']].mean().reset_index()
-    fig.add_trace(go.Scatter(x=daily['week'], y=daily['patient_satisfaction'], mode='lines', line=dict(color='blue'), name='Sat Trend'), row=3, col=2)
-    fig.add_trace(go.Scatter(x=daily['week'], y=daily['presence_rate']*100, mode='lines', line=dict(color='red', dash='dot'), name='Pres %'), row=3, col=2)
-
-    # Q9: Heatmap
-    if 'presence_category' in df.columns:
-        hm = df.pivot_table(index='service', columns='presence_category', values='patient_satisfaction')
-        fig.add_trace(go.Heatmap(z=hm.values, x=hm.columns.astype(str), y=hm.index, colorscale='RdYlGn'), row=3, col=3)
-
-    fig.update_layout(height=900, showlegend=False, title_text="<b>Comprehensive Staffing Research Analysis</b>")
-    
-    return dcc.Graph(figure=fig), html.Div([html.H4("Analysis"), html.P("This matrix explores 9 key dimensions of staffing impact.")])
-
-def create_correlation_view(df):
-    """
-    Creates the Correlation Heatmap.
-    """
-    # Select numeric columns
-    cols = ['staff_present', 'presence_rate', 'doctor', 'nurse', 'workload', 
-            'patient_satisfaction', 'avg_los', 'staff_morale', 'patients_refused']
-    
-    valid_cols = [c for c in cols if c in df.columns]
-    corr_matrix = df[valid_cols].corr()
-
-    fig = go.Figure(data=go.Heatmap(
-        z=corr_matrix.values,
-        x=valid_cols,
-        y=valid_cols,
-        colorscale='RdBu', zmin=-1, zmax=1,
-        text=np.round(corr_matrix.values, 2),
-        texttemplate='%{text}',
-        colorbar=dict(title="Pearson r")
-    ))
-
-    fig.update_layout(title="<b>Correlation Matrix</b>", height=600)
-    
-    return dcc.Graph(figure=fig), html.Div([html.H4("Correlation Map"), html.P("Red = Negative Correlation, Blue = Positive Correlation.")])
+        fig = create_view2(df, view_mode, services, events, weeks, hover_data)
+        
+        return fig, view_mode, services, events, weeks

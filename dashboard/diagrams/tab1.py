@@ -75,67 +75,77 @@ def create_layout(df):
     all_events = sorted(df['event'].dropna().unique())
 
     return html.Div([
-        html.H2("Linked Dashboard — Metric & Time Brushing"),
+        html.H1("Linked Dashboard — Metric & Time Brushing", 
+                style={'textAlign': 'center', 'fontFamily': 'Arial, sans-serif'}),
+        
+        html.P("Analyze hospital metrics across different time granularities. Brush metrics on the small multiple charts to highlight parallel coordinate paths, or box-select time ranges to filter views.",
+               style={'textAlign': 'center', 'color': '#666', 'marginBottom': '30px'}),
 
         dcc.Store(id='d1-global-metric-brush', data=[]),
         dcc.Store(id='d1-time-selection', data=None),
         dcc.Store(id='d1-pcp-brush-store', data={}),
 
+        # --- Control Panel ---
         html.Div([
-            dcc.RadioItems(
-                id='d1-time-granularity',
-                options=[
-                    {'label': 'Weekly', 'value': 'weekly'},
-                    {'label': 'Monthly', 'value': 'monthly'},
-                    {'label': 'Quarterly', 'value': 'quarterly'}
-                ],
-                value='weekly',
-                inline=True
-            ),
-            dcc.Dropdown(
-                id='d1-event-filter',
-                className='event-filter',
-                options=[
-                    {'label': EVENT_LABELS.get(e, e), 'value': e}
-                    for e in all_events
-                ],
-                value=all_events,
-                multi=True
-            ),
-            dcc.Dropdown(
-                id='d1-service-filter',
-                className='service-filter',
-                options=[
-                    {'label': SERVICE_LABELS[s], 'value': s}
-                    for s in FIXED_SERVICES
-                ],
-                value=FIXED_SERVICES,
-                multi=True,
-                placeholder="Filter services"
-            )
-        ]),
-
-        html.Hr(),
-
-        html.Div(id='d1-container'),
-        html.Hr(),
-
-        html.Div([
-            html.Div(
-                html.Button(
-                    "Reset selection",
-                    id="d1-reset-selection-btn",
-                    n_clicks=0,
-                    style={
-                        "marginBottom": "8px",
-                        "padding": "6px 12px",
-                        "fontWeight": "bold"
-                    }
+            html.Div([
+                html.Label("Time Granularity:", style={'fontWeight': 'bold'}),
+                dcc.RadioItems(
+                    id='d1-time-granularity',
+                    options=[
+                        {'label': 'Weekly', 'value': 'weekly'},
+                        {'label': 'Monthly', 'value': 'monthly'},
+                        {'label': 'Quarterly', 'value': 'quarterly'}
+                    ],
+                    value='weekly',
+                    inline=True
                 ),
-                style={"textAlign": "right"}
-            ),
+            ], style={'marginBottom': '20px'}),
+
+            html.Div([
+                html.Div([
+                    html.Label("Filter Events:", style={'fontWeight': 'bold'}),
+                    dcc.Dropdown(
+                        id='d1-event-filter',
+                        className='event-filter',
+                        options=[
+                            {'label': EVENT_LABELS.get(e, e), 'value': e}
+                            for e in all_events
+                        ],
+                        value=all_events,
+                        multi=True
+                    ),
+                ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top'}),
+
+                html.Div([
+                    html.Label("Filter Services:", style={'fontWeight': 'bold'}),
+                    dcc.Dropdown(
+                        id='d1-service-filter',
+                        className='service-filter',
+                        options=[
+                            {'label': SERVICE_LABELS[s], 'value': s}
+                            for s in FIXED_SERVICES
+                        ],
+                        value=FIXED_SERVICES,
+                        multi=True,
+                        placeholder="Filter services"
+                    ),
+                ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top', 'paddingLeft': '4%'}),
+            ]),
+
+            # Reset
+            html.Div([
+                html.Button("Reset Selections", id="d1-reset-selection-btn", n_clicks=0, style={'cursor':'pointer', 'padding': '5px 15px', 'marginRight': '10px'}),
+                html.Button("Reset All Filters", id="d1-reset-all-filters-btn", n_clicks=0, style={'cursor':'pointer', 'padding': '5px 15px'}),
+            ], style={'textAlign': 'center', 'marginTop': '15px'}),
+
+        ], style={'width': '90%', 'margin': '0 auto', 'padding': '20px', 'backgroundColor': '#f9f9f9', 'borderRadius': '10px', 'marginBottom': '20px'}),
+
+        # --- Main Dashboard Area ---
+        html.Div([
+            html.Div(id='d1-container'),
+            html.Hr(style={'margin': '30px 0'}),
             html.Div(id='d2-container')
-        ])
+        ], style={'width': '95%', 'margin': '0 auto'})
     ])
 
 # ------------------------
@@ -300,8 +310,9 @@ def register_callbacks(app, df):
             ))
 
             fig.update_layout(
-                title=SERVICE_LABELS.get(s, s),
-                height=450
+                title=dict(text=SERVICE_LABELS.get(s, s), font=dict(size=24)),
+                height=450,
+                font=dict(size=14)
             )
 
             figs.append(
@@ -408,9 +419,9 @@ def register_callbacks(app, df):
                         "Value: %{y}<extra></extra>"
                     ),
                     opacity=1.0 if (not is_brushed or sel) else 0.15,
-                    line=dict(width=4 if sel else 2),
+                    line=dict(width=5 if sel else 2.5),
                     marker=dict(
-                        size=np.where(pcp_mask, 12, 4)
+                        size=np.where(pcp_mask, 16, 6)
                     )
                 ))
 
@@ -433,11 +444,11 @@ def register_callbacks(app, df):
                 )
 
             fig.update_layout(
-                title=SERVICE_LABELS.get(s, s),
+                title=dict(text=SERVICE_LABELS.get(s, s), font=dict(size=24)),
                 dragmode='select',
                 clickmode='event+select',
-                xaxis=dict(title=x_axis_label),
-                yaxis=dict(title='Value'),
+                xaxis=dict(title=x_axis_label, titlefont=dict(size=18), tickfont=dict(size=14)),
+                yaxis=dict(title='Value', titlefont=dict(size=18), tickfont=dict(size=14)),
                 uirevision=f"line-chart-{s}",
                 selectionrevision="keep-selection",
                 shapes=shapes    
@@ -450,16 +461,30 @@ def register_callbacks(app, df):
 
         return charts
 
-    # Reset button
+    # Reset buttons
     @app.callback(
         Output('d1-global-metric-brush', 'data', allow_duplicate=True),
         Output('d1-time-selection', 'data', allow_duplicate=True),
         Output('d1-pcp-brush-store', 'data', allow_duplicate=True),
+        Output('d1-time-granularity', 'value'),
+        Output('d1-event-filter', 'value'),
+        Output('d1-service-filter', 'value'),
         Input('d1-reset-selection-btn', 'n_clicks'),
+        Input('d1-reset-all-filters-btn', 'n_clicks'),
         prevent_initial_call=True
     )
-    def reset_all_selections(n_clicks):
-        if n_clicks:
-            return [], None, {}
-        return dash.no_update, dash.no_update, dash.no_update
+    def reset_dash1_handlers(n_sel, n_all):
+        ctx = dash.callback_context
+        if not ctx.triggered:
+            return dash.no_update
+        
+        trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+        
+        if trigger_id == 'd1-reset-selection-btn':
+            return [], None, {}, dash.no_update, dash.no_update, dash.no_update
+        
+        if trigger_id == 'd1-reset-all-filters-btn':
+            return [], None, {}, 'weekly', 'none', FIXED_SERVICES
+            
+        return [dash.no_update]*6
     

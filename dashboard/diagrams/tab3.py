@@ -103,18 +103,18 @@ def create_layout(df):
             # LEFT COLUMN: Bubble Chart
             html.Div([
                 html.Div([
-                    html.H3("State Space (Select Region to Filter)", style={'display': 'inline-block', 'fontSize': '16px', 'marginRight': '10px'}),
-                    html.Button("Clear Selection", id="d5-clear-selection-btn", n_clicks=0, style={'cursor':'pointer', 'fontSize': '12px'}),
+                    html.H3("State Space (Select Region to Filter)", style={'display': 'inline-block', 'fontSize': '24px', 'marginRight': '10px'}),
+                    html.Button("Clear Selection", id="d5-clear-selection-btn", n_clicks=0, style={'cursor':'pointer', 'fontSize': '24px'}),
                 ], style={'textAlign': 'center'}),
                 dcc.Graph(id='d5-bubble-chart')
             ], style={'width': '58%', 'display': 'inline-block', 'verticalAlign': 'top'}),
             
             # RIGHT COLUMN: Heatmap and Timeline
             html.Div([
-                html.H3("Cluster DNA", style={'textAlign': 'center', 'fontSize': '16px'}),
+                html.H3("Cluster DNA", style={'textAlign': 'center', 'fontSize': '24px'}),
                 dcc.Graph(id='d5-heatmap-dna', style={'height': '300px'}),
                 
-                html.H3("Timeline (Filtered)", style={'textAlign': 'center', 'fontSize': '16px', 'marginTop': '20px'}),
+                html.H3("Timeline (Filtered)", style={'textAlign': 'center', 'fontSize': '24px', 'marginTop': '20px'}),
                 dcc.Graph(id='d5-heatmap-timeline', style={'height': '350px'})
             ], style={'width': '40%', 'display': 'inline-block', 'verticalAlign': 'top', 'paddingLeft': '2%'})
         ], style={'width': '95%', 'margin': '0 auto'}),
@@ -122,7 +122,7 @@ def create_layout(df):
         # BOTTOM ROW: Drill-down
         html.Div([
             html.Hr(),
-            html.H3("Capacity Drill-down (Filtered)", style={'textAlign': 'center', 'fontSize': '16px'}),
+            html.H3("Capacity Drill-down (Filtered)", style={'textAlign': 'center', 'fontSize': '24px'}),
             html.P("Detailed view of services operating >95% capacity.",
                    style={'textAlign': 'center', 'color': '#777', 'fontSize': '12px'}),
             dcc.Graph(id='d5-capacity-drilldown', style={'height': '600px'})
