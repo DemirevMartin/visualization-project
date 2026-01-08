@@ -150,10 +150,7 @@ def create_layout(df):
 # Callbacks
 # ------------------------
 def register_callbacks(app, df):
-    
-    # Preprocessing for callbacks (ensure df has needed cols)
-    # Note: df is captured in closure. If df is mutable and changed elsewhere, be careful.
-    # Ideally we process it once.
+    # Preprocessing
     df = df.copy()
     df['week'] = df.get('week', 1).astype(int)
     df['month'] = df.get('month', ((df['week'] - 1) // 4 + 1)).astype(int)
@@ -232,7 +229,7 @@ def register_callbacks(app, df):
             if not restyle:
                 continue
 
-            changes = restyle[0]   # what changed
+            changes = restyle[0]
             for k, v in changes.items():
                 # Example key: "dimensions[1].constraintrange"
                 if "constraintrange" in k:

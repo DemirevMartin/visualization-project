@@ -180,7 +180,7 @@ def create_view1(df, selected_weeks=None, selected_services=None):
     fig.update_yaxes(title_text="Average Satisfaction", row=2, col=2)
     
     fig.update_layout(
-        height=800,
+        height=1000,
         title_text="TOP panels linked by WEEK | BOTTOM panels linked by SERVICE",
         template='plotly_white', showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
@@ -259,7 +259,7 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
 
     fig.update_layout(
         title=f"",
-        barmode='stack', height=600, legend=dict(orientation="h", y=1.08),
+        barmode='stack', height=800, legend=dict(orientation="h", y=1.08),
         template='plotly_white'
     )
     fig.update_xaxes(title_text="Week", row=2, col=1)
@@ -328,9 +328,9 @@ def create_layout(df):
             html.H3("Staff Performance & Satisfaction Analysis", 
                     style={'color': '#2c3e50', 'borderBottom': '3px solid #3498db', 'paddingBottom': '10px'}),
             
-            dcc.Store(id='dash1-store', data=None),
-            html.Div(id='dash1-status'),
-            dcc.Graph(id='dash1-graph', config={'displayModeBar': True, 'modeBarButtonsToAdd': ['select2d', 'lasso2d']}),
+            dcc.Store(id='view1-store', data=None),
+            html.Div(id='view1-status'),
+            dcc.Graph(id='view1-graph', style={'height': '1000px'}, config={'displayModeBar': True, 'modeBarButtonsToAdd': ['select2d', 'lasso2d']}),
         ], style={'marginBottom': '40px', 'padding': '20px', 'backgroundColor': '#ffffff', 
                   'borderRadius': '10px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'}),
 
@@ -339,7 +339,7 @@ def create_layout(df):
             html.H3("Staff Allocation Timeline", 
                     style={'color': '#2c3e50', 'borderBottom': '3px solid #2ecc71', 'paddingBottom': '10px'}),
             
-            dcc.Graph(id='dash2-graph', config={'displayModeBar': True}),
+            dcc.Graph(id='view2-graph', style={'height': '800px'}, config={'displayModeBar': True}),
         ], style={'padding': '20px', 'backgroundColor': '#ffffff', 
                   'borderRadius': '10px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'}),
     ])
@@ -367,13 +367,13 @@ def register_callbacks(app, df):
 
     # CALLBACK: VIEW 1
     @app.callback(
-        [Output('dash1-graph', 'figure'), Output('dash1-store', 'data')],
+        [Output('view1-graph', 'figure'), Output('view1-store', 'data')],
         [Input('filter-week-slider', 'value'), Input('filter-services', 'value'),
-         Input('dash1-graph', 'clickData'), Input('dash1-graph', 'selectedData'),
+         Input('view1-graph', 'clickData'), Input('view1-graph', 'selectedData'),
          Input('filter-reset', 'n_clicks')],
-        [State('dash1-store', 'data')]
+        [State('view1-store', 'data')]
     )
-    def update_dash1(weeks, services, click_data, selected_data, reset_clicks, current_state):
+    def update_view1(weeks, services, click_data, selected_data, reset_clicks, current_state):
         if current_state is None:
             current_state = {'selected_weeks': None, 'selected_services': None}
         
@@ -383,7 +383,7 @@ def register_callbacks(app, df):
             current_state = {'selected_weeks': None, 'selected_services': None}
         elif triggered in ['filter-week-slider', 'filter-services']:
             current_state = {'selected_weeks': None, 'selected_services': None}
-        elif triggered == 'dash1-graph' and click_data:
+        elif triggered == 'view1-graph' and click_data:
             if 'points' in click_data and len(click_data['points']) > 0:
                 point = click_data['points'][0]
                 if 'customdata' in point and point['customdata']:
@@ -394,7 +394,7 @@ def register_callbacks(app, df):
                     except (ValueError, TypeError):
                         service = custom[0]
                         current_state['selected_services'] = None if current_state['selected_services'] == [service] else [service]
-        elif triggered == 'dash1-graph' and selected_data:
+        elif triggered == 'view1-graph' and selected_data:
             if 'points' in selected_data:
                 weeks_list = [int(p['customdata'][0]) for p in selected_data['points'] 
                              if 'customdata' in p and p.get('curveNumber', 0) < 16]
@@ -413,8 +413,8 @@ def register_callbacks(app, df):
         return fig, current_state
 
     @app.callback(
-        Output('dash1-status', 'children'),
-        Input('dash1-store', 'data')
+        Output('view1-status', 'children'),
+        Input('view1-store', 'data')
     )
     def update_view1_status(state):
         if state is None or (not state.get('selected_weeks') and not state.get('selected_services')):
@@ -435,12 +435,12 @@ def register_callbacks(app, df):
 
     # CALLBACK: VIEW 2
     @app.callback(
-        Output('dash2-graph', 'figure'),
+        Output('view2-graph', 'figure'),
         [Input('filter-view-mode', 'value'), 
          Input('filter-services', 'value'), 
          Input('filter-events', 'value'),
          Input('filter-week-slider', 'value'), 
-         Input('dash2-graph', 'hoverData')]
+         Input('view2-graph', 'hoverData')]
     )
     def update_view2(view_mode, services, events, weeks, hover_data):
         if not services:
