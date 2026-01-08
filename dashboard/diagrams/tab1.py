@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 from dash.exceptions import PreventUpdate
 
+from colors import COLORS_DICT
+
 # ------------------------
 # Constants & Helpers
 # ------------------------
@@ -37,6 +39,23 @@ METRIC_LABELS = [
     'Staff Morale',
     'Patients Refused'
 ]
+
+# Colorscale for PCP
+COLORSCALE = [
+    [0.0, COLORS_DICT['sufficient']],
+    [0.5, COLORS_DICT['sufficient']],
+    [0.5, COLORS_DICT['shortage']],
+    [1.0, COLORS_DICT['shortage']]
+]
+
+METRIC_COLORS = [
+    COLORS_DICT['patients_admitted'],
+    COLORS_DICT['patient_satisfaction'],
+    COLORS_DICT['staff_morale'],
+    COLORS_DICT['patients_refused']
+]
+
+# Metric colors for line charts
 
 def aggregate_line(df_in, agg, services, events):
     dff = df_in[df_in['service'].isin(services)].copy()
@@ -277,7 +296,7 @@ def register_callbacks(app, df):
                 dict(label='Refused', values=sub['patients_refused'])
             ]
 
-            # ---- APPLY INTEGRATED BRUSHING (NEW, minimal)
+            # ---- brushing
             for k, v in (pcp_brush or {}).items():
                 # k looks like: "dimensions[1].constraintrange"
                 idx = int(k.split('[')[1].split(']')[0])
@@ -288,14 +307,9 @@ def register_callbacks(app, df):
             fig = go.Figure(go.Parcoords(
                 line=dict(
                     color=pcp_color,
-                    cmin=0.0,
+                    cmin=0,
                     cmax=1.5,
-                    colorscale=[
-                        [0.0, '#c6dbef'],   # Sufficient (dim)
-                        [0.33, '#1f77b4'],  # Sufficient (selected)
-                        [0.66, '#f2b6b6'],  # Shortage (dim)
-                        [1.0, '#d62728']    # Shortage (selected)
-                    ],
+                    colorscale=COLORSCALE,
                     showscale=True,
                     colorbar=dict(
                         title="Availability",
@@ -386,13 +400,13 @@ def register_callbacks(app, df):
                 .reindex(sub[time_col])
             )
 
-            for m, label in zip(METRICS, METRIC_LABELS):
+            for idx, (m, label) in enumerate(zip(METRICS, METRIC_LABELS)):
                 sel = label in selected
                 pcp_mask = np.zeros(len(sub), dtype=bool)
                 
                 # Check PCP ranges
-                for idx, v in pcp_ranges.items():
-                    if pcp_dim_to_metric[idx] == m and v:
+                for dim_idx, v in pcp_ranges.items():
+                    if pcp_dim_to_metric[dim_idx] == m and v:
                         ranges = v if isinstance(v[0], (list, tuple)) else [v]
                         mask_part = np.zeros(len(sub), dtype=bool)
                         for lo, hi in ranges:
@@ -415,8 +429,9 @@ def register_callbacks(app, df):
                         "Value: %{y}<extra></extra>"
                     ),
                     opacity=1.0 if (not is_brushed or sel) else 0.15,
-                    line=dict(width=4 if sel else 2),
+                    line=dict(color=METRIC_COLORS[idx], width=4 if sel else 2),
                     marker=dict(
+                        color=METRIC_COLORS[idx],
                         size=np.where(pcp_mask, 12, 4)
                     )
                 ))

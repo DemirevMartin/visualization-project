@@ -5,6 +5,8 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
+from colors import COLORS_DICT, CLUSTER_COLORS
+
 # ------------------------
 # Layout
 # ------------------------
@@ -100,13 +102,13 @@ def create_layout(df):
         html.Div([
             # LEFT COLUMN: Bubble Chart
             html.Div([
-                dcc.Graph(id='d5-bubble-chart', style={'height': '660px'})
+                dcc.Graph(id='d5-bubble-chart', style={'height': '750px'})
             ], style={'width': '58%', 'display': 'inline-block', 'verticalAlign': 'top'}),
             
             # RIGHT COLUMN: Heatmap and Timeline
             html.Div([
-                dcc.Graph(id='d5-heatmap-dna', style={'height': '300px', 'marginBottom': '10px'}),
-                dcc.Graph(id='d5-heatmap-timeline', style={'height': '350px'})
+                dcc.Graph(id='d5-heatmap-dna', style={'height': '380px', 'marginBottom': '10px'}),
+                dcc.Graph(id='d5-heatmap-timeline', style={'height': '360px'})
             ], style={'width': '40%', 'display': 'inline-block', 'verticalAlign': 'top', 'paddingLeft': '2%'})
         ], style={'width': '95%', 'margin': '0 auto'}),
 
@@ -222,15 +224,7 @@ def register_callbacks(app, df):
         df_viz['cluster_label'] = df_viz['cluster'].astype(str)
 
         # Define Colors
-        if k == 2:
-            colors = ['#2ca02c', '#d62728']
-        elif k == 3:
-            colors = ['#2ca02c', "#0e66ff", '#d62728']
-        elif k == 4:
-            colors = ['#2ca02c', "#0e66ff", '#d62728', "#43008b"]
-        else:
-            colors = ['#2ca02c', "#0e66ff", '#d62728', "#43008b", "#F32ADB"]
-        
+        colors = CLUSTER_COLORS[:k]
         color_map = {str(i): c for i, c in enumerate(colors) if i < len(colors)}
         
         # Update Cluster Dropdown Options
@@ -333,7 +327,7 @@ def register_callbacks(app, df):
                     trace.visible = 'legendonly'
             
             fig_bubble.update_layout(
-                height=700,
+                height=750,
                 legend_title="Stress Level",
                 margin=dict(l=40, r=40, t=40, b=40),
                 clickmode='event+select'
@@ -359,7 +353,7 @@ def register_callbacks(app, df):
         ))
         fig_dna.update_layout(
             title="<b>Cluster DNA</b> (Global Definition)",
-            height=300,
+            height=380,
             margin=dict(l=40, r=40, t=40, b=40),
             yaxis=dict(autorange="reversed")
         )
@@ -378,7 +372,7 @@ def register_callbacks(app, df):
             )
             fig_timeline.update_traces(marker=dict(size=12, symbol='square'))
             fig_timeline.update_layout(
-                height=350,
+                height=360,
                 xaxis_title="Week", 
                 yaxis_title="Service",
                 showlegend=False,

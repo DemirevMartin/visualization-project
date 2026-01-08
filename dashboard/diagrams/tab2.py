@@ -4,14 +4,16 @@ import plotly.express as px
 import numpy as np
 from plotly.subplots import make_subplots
 
+from colors import COLORS_DICT
+
 # ===========================
 # CONSTANTS
 # ===========================
 SERVICE_COLORS = {
-    'emergency': '#d62728',
-    'ICU': '#ff7f0e',
-    'surgery': '#2ca02c',
-    'general_medicine': '#1f77b4'
+    'emergency': COLORS_DICT['emergency'],
+    'ICU': COLORS_DICT['ICU'],
+    'surgery': COLORS_DICT['surgery'],
+    'general_medicine': COLORS_DICT['general_medicine']
 }
 
 SERVICE_LABELS = {
@@ -20,6 +22,12 @@ SERVICE_LABELS = {
     'surgery': 'Surgery',
     'general_medicine': 'General Medicine'
 }
+
+ROLE_COLORS = [
+    COLORS_DICT['doctor'],
+    COLORS_DICT['nurse'],
+    COLORS_DICT['nursing_assistant']
+]
 
 # ===========================
 # HELPER FUNCTIONS
@@ -220,17 +228,16 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
 
         roles = ['doctor', 'nurse', 'nursing_assistant']
         role_labels = {'doctor': 'Doctor', 'nurse': 'Nurse', 'nursing_assistant': 'Nursing Assistant'}
-        colors = ["#D5E925", "#FF0000", "#0004FF"]
 
         for i, role in enumerate(roles):
             fig.add_trace(
-                go.Bar(x=df_agg['week'], y=df_agg[role], name=role_labels[role], marker_color=colors[i]),
+                go.Bar(x=df_agg['week'], y=df_agg[role], name=role_labels[role], marker_color=ROLE_COLORS[i]),
                 row=1, col=1
             )
 
         fig.add_trace(
             go.Scatter(x=df_agg['week'], y=df_agg['patients_admitted'],
-                      name='Patients Admitted', mode='lines+markers', line=dict(color='black', width=3)),
+                      name='Patients Admitted', mode='lines+markers', line=dict(color=COLORS_DICT['patients_admitted'], width=3)),
             row=2, col=1
         )
         title_suffix = " + ".join([s.capitalize() for s in selected_services])
