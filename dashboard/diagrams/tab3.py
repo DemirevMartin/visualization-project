@@ -287,8 +287,6 @@ def register_callbacks(app, df):
         if triggered_id == 'd5-bubble-chart' and restyle_data:
             fig_bubble = no_update
         else:
-            df_view['opacity'] = highlight_mask.map({True: 1.0, False: 0.2})
-            
             fig_bubble = px.scatter(
                 df_view,
                 x='occupancy_rate',
@@ -305,9 +303,6 @@ def register_callbacks(app, df):
             
             for trace in fig_bubble.data:
                 cluster_val = trace.name
-                cluster_df = df_view[df_view['cluster_label'] == cluster_val]
-                if not cluster_df.empty:
-                    trace.marker.opacity = cluster_df['opacity'].values
                     
                 if cluster_val not in visible_clusters:
                     trace.visible = 'legendonly'
@@ -324,6 +319,11 @@ def register_callbacks(app, df):
                 yaxis=dict(title=dict(font=dict(size=17)), tickfont=dict(size=15)),
                 legend=dict(font=dict(size=15)),
                 uirevision='bubble-chart'
+            )
+            
+            fig_bubble.update_traces(
+                unselected=dict(marker=dict(opacity=0.15)),
+                selected=dict(marker=dict(opacity=1.0))
             )
         
         # --- FIGURE 2: CLUSTER DNA HEATMAP ---
