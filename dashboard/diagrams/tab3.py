@@ -287,7 +287,7 @@ def register_callbacks(app, df):
         if triggered_id == 'd5-bubble-chart' and restyle_data:
             fig_bubble = no_update
         else:
-            df_view['opacity'] = highlight_mask.map({True: 1.0, False: 0.1})
+            df_view['opacity'] = highlight_mask.map({True: 1.0, False: 0.2})
             
             fig_bubble = px.scatter(
                 df_view,
@@ -318,10 +318,12 @@ def register_callbacks(app, df):
                 legend_title=dict(text="Stress Level", font=dict(size=16)),
                 margin=dict(l=70, r=70, t=80, b=60),
                 clickmode='event+select',
+                dragmode='select',
                 font=dict(size=14),
                 xaxis=dict(title=dict(font=dict(size=17)), tickfont=dict(size=15)),
                 yaxis=dict(title=dict(font=dict(size=17)), tickfont=dict(size=15)),
-                legend=dict(font=dict(size=15))
+                legend=dict(font=dict(size=15)),
+                uirevision='bubble-chart'
             )
         
         # --- FIGURE 2: CLUSTER DNA HEATMAP ---
