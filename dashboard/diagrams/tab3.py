@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
-from colors import COLORS_DICT, CLUSTER_COLORS
+from colors import CLUSTER_COLORS
 
 # ------------------------
 # Layout
@@ -102,19 +102,19 @@ def create_layout(df):
         html.Div([
             # LEFT COLUMN: Bubble Chart
             html.Div([
-                dcc.Graph(id='d5-bubble-chart', style={'height': '750px'})
+                dcc.Graph(id='d5-bubble-chart', style={'height': '850px'})
             ], style={'width': '58%', 'display': 'inline-block', 'verticalAlign': 'top'}),
             
             # RIGHT COLUMN: Heatmap and Timeline
             html.Div([
-                dcc.Graph(id='d5-heatmap-dna', style={'height': '380px', 'marginBottom': '10px'}),
-                dcc.Graph(id='d5-heatmap-timeline', style={'height': '360px'})
+                dcc.Graph(id='d5-heatmap-dna', style={'height': '460px', 'marginBottom': '10px'}),
+                dcc.Graph(id='d5-heatmap-timeline', style={'height': '450px'})
             ], style={'width': '40%', 'display': 'inline-block', 'verticalAlign': 'top', 'paddingLeft': '2%'})
         ], style={'width': '95%', 'margin': '0 auto'}),
 
         # BOTTOM ROW: Drill-down
         html.Div([
-            dcc.Graph(id='d5-capacity-drilldown', style={'height': '600px'})
+            dcc.Graph(id='d5-capacity-drilldown', style={'height': '700px'})
         ], style={'width': '95%', 'margin': '0 auto', 'marginTop': '30px', 'paddingBottom': '50px'})
     ])
 
@@ -153,12 +153,11 @@ def register_callbacks(app, df):
          Input('d5-bubble-chart', 'selectedData'),
          Input('d5-reset-filters-btn', 'n_clicks'),
          Input('d5-clear-selection-btn', 'n_clicks'),
-         Input('d5-bubble-chart', 'restyleData'),
-         Input('d5-capacity-drilldown', 'clickData')],
+         Input('d5-bubble-chart', 'restyleData')],
         [State('d5-bubble-chart', 'figure')]
     )
     def update_dashboard(k, selected_services, selected_events, week_range, focus_cluster, bubble_selected, 
-                         reset_clicks, clear_clicks, restyle_data, drilldown_click, current_figure):
+                         reset_clicks, clear_clicks, restyle_data, current_figure):
         
         triggered_id = ctx.triggered_id
         
@@ -188,19 +187,6 @@ def register_callbacks(app, df):
             bubble_selected = None
             ret_selected_data = None
         
-        # Handle Drilldown click (sync to bubble chart selection)
-        elif triggered_id == 'd5-capacity-drilldown' and drilldown_click:
-            if 'points' in drilldown_click and drilldown_click['points']:
-                # Get the point index from customdata if available, or try to reconstruct
-                point = drilldown_click['points'][0]
-                # We need to find the correct index in the original dataframe
-                if 'customdata' in point and point['customdata']:
-                    selected_idx = point['customdata'][0]
-                    ret_selected_data = {
-                        'points': [{'customdata': [selected_idx]}]
-                    }
-                    bubble_selected = ret_selected_data # Use this for current filtering logic
-
         # ----------------------------------------------------
         # 1. Global Clustering (On Full Data)
         # ----------------------------------------------------
@@ -327,10 +313,15 @@ def register_callbacks(app, df):
                     trace.visible = 'legendonly'
             
             fig_bubble.update_layout(
-                height=750,
-                legend_title="Stress Level",
-                margin=dict(l=40, r=40, t=40, b=40),
-                clickmode='event+select'
+                height=850,
+                title=dict(text="<b>State Space:</b> Stress vs Quality", font=dict(size=22)),
+                legend_title=dict(text="Stress Level", font=dict(size=16)),
+                margin=dict(l=70, r=70, t=80, b=60),
+                clickmode='event+select',
+                font=dict(size=14),
+                xaxis=dict(title=dict(font=dict(size=17)), tickfont=dict(size=15)),
+                yaxis=dict(title=dict(font=dict(size=17)), tickfont=dict(size=15)),
+                legend=dict(font=dict(size=15))
             )
         
         # --- FIGURE 2: CLUSTER DNA HEATMAP ---
@@ -349,19 +340,25 @@ def register_callbacks(app, df):
             zmid=0,
             text=text_values,
             texttemplate="%{text}",
-            textfont={"size": 12}
+            textfont={"size": 15}
         ))
         fig_dna.update_layout(
-            title="<b>Cluster DNA</b> (Global Definition)",
-            height=380,
-            margin=dict(l=40, r=40, t=40, b=40),
-            yaxis=dict(autorange="reversed")
+            title=dict(text="<b>Cluster DNA</b> (Global Definition)", font=dict(size=22)),
+            height=460,
+            margin=dict(l=70, r=70, t=80, b=60),
+            yaxis=dict(autorange="reversed", tickfont=dict(size=15), title=dict(font=dict(size=17))),
+            xaxis=dict(tickfont=dict(size=15), title=dict(font=dict(size=17))),
+            font=dict(size=14)
         )
 
         # --- FIGURE 3: TIMELINE HEATMAP ---
         if df_highlight.empty:
             fig_timeline = go.Figure()
-            fig_timeline.update_layout(title="No data selected")
+            fig_timeline.update_layout(
+                title=dict(text="No data selected", font=dict(size=20)),
+                margin=dict(l=70, r=70, t=80, b=60),
+                font=dict(size=14)
+            )
         else:
             fig_timeline = px.scatter(
                 df_highlight, x='week', y='service', color='cluster_label', symbol='cluster_label',
@@ -370,13 +367,17 @@ def register_callbacks(app, df):
                 title="<b>Timeline:</b> Crisis Patterns",
                 hover_data=['occupancy_rate']
             )
-            fig_timeline.update_traces(marker=dict(size=12, symbol='square'))
+            fig_timeline.update_traces(marker=dict(size=14, symbol='square'))
             fig_timeline.update_layout(
-                height=360,
-                xaxis_title="Week", 
-                yaxis_title="Service",
+                height=450,
+                title=dict(text="<b>Timeline:</b> Crisis Patterns", font=dict(size=22)),
+                xaxis_title=dict(text="Week", font=dict(size=17)), 
+                yaxis_title=dict(text="Service", font=dict(size=17)),
                 showlegend=False,
-                xaxis=dict(range=[min_week, max_week])
+                xaxis=dict(range=[min_week, max_week], tickfont=dict(size=15)),
+                yaxis=dict(tickfont=dict(size=15)),
+                margin=dict(l=70, r=70, t=80, b=60),
+                font=dict(size=14)
             )
 
         # --- FIGURE 4: CAPACITY DRILL-DOWN ---
@@ -385,8 +386,10 @@ def register_callbacks(app, df):
         if df_drill.empty:
             fig_drill = go.Figure()
             fig_drill.update_layout(
-                title="No high-occupancy data in selection",
-                height=600
+                title=dict(text="No high-occupancy data in selection", font=dict(size=20)),
+                height=700,
+                margin=dict(l=70, r=70, t=80, b=60),
+                font=dict(size=14)
             )
         else:
             fig_drill = px.scatter(
@@ -399,15 +402,17 @@ def register_callbacks(app, df):
                 category_orders={"cluster_label": [str(i) for i in range(k)]},
                 title="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall",
                 hover_data=['week', 'patients_admitted', 'staff_morale'],
-                custom_data=['index_col']
             )
             
             fig_drill.update_layout(
-                height=600, 
-                xaxis_title="Patient Satisfaction",
+                height=700, 
+                title=dict(text="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall", font=dict(size=22)),
+                xaxis_title=dict(text="Patient Satisfaction", font=dict(size=17)),
                 showlegend=False,
                 yaxis={'visible': False, 'showticklabels': False},
-                margin=dict(l=120)
+                margin=dict(l=140, r=70, t=80, b=60),
+                font=dict(size=14),
+                xaxis=dict(tickfont=dict(size=15))
             )
             fig_drill.update_yaxes(matches=None, showticklabels=False, visible=False)
             fig_drill.update_traces(marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')))

@@ -177,22 +177,25 @@ def create_view1(df, selected_weeks=None, selected_services=None):
             row=2, col=2
         )
 
-    fig.update_xaxes(title_text="Staff Presence Rate (%)", row=1, col=1, range=[0, 105])
-    fig.update_xaxes(title_text="Patients per Staff", row=1, col=2, range=[0, 15])
-    fig.update_xaxes(title_text="Average Satisfaction", row=2, col=1, range=[0, 105])
-    fig.update_xaxes(title_text="Average Presence Rate (%)", row=2, col=2)
+    fig.update_xaxes(title_text="Staff Presence Rate (%)", row=1, col=1, range=[0, 105], title_font=dict(size=17), tickfont=dict(size=15))
+    fig.update_xaxes(title_text="Patients per Staff", row=1, col=2, range=[0, 15], title_font=dict(size=17), tickfont=dict(size=15))
+    fig.update_xaxes(title_text="Average Satisfaction", row=2, col=1, range=[0, 105], title_font=dict(size=17), tickfont=dict(size=15))
+    fig.update_xaxes(title_text="Average Presence Rate (%)", row=2, col=2, title_font=dict(size=17), tickfont=dict(size=15))
     
-    fig.update_yaxes(title_text="Patient Satisfaction", row=1, col=1, range=[0, 105])
-    fig.update_yaxes(title_text="Patient Satisfaction", row=1, col=2, range=[0, 105])
-    fig.update_yaxes(title_text="Department", row=2, col=1, tickfont=dict(size=12))
-    fig.update_yaxes(title_text="Average Satisfaction", row=2, col=2)
+    fig.update_yaxes(title_text="Patient Satisfaction", row=1, col=1, range=[0, 105], title_font=dict(size=17), tickfont=dict(size=15))
+    fig.update_yaxes(title_text="Patient Satisfaction", row=1, col=2, range=[0, 105], title_font=dict(size=17), tickfont=dict(size=15))
+    fig.update_yaxes(title_text="Department", row=2, col=1, tickfont=dict(size=15), title_font=dict(size=17))
+    fig.update_yaxes(title_text="Average Satisfaction", row=2, col=2, title_font=dict(size=17), tickfont=dict(size=15))
     
     fig.update_layout(
-        height=1000,
+        height=1100,
         title_text="TOP panels linked by WEEK | BOTTOM panels linked by SERVICE",
+        title_font=dict(size=20),
         template='plotly_white', showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
-        hovermode='closest'
+        legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, font=dict(size=15)),
+        hovermode='closest',
+        margin=dict(l=80, r=70, t=80, b=70),
+        font=dict(size=14)
     )
     
     return fig
@@ -266,12 +269,14 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
 
     fig.update_layout(
         title=f"",
-        barmode='stack', height=800, legend=dict(orientation="h", y=1.08),
-        template='plotly_white'
+        barmode='stack', height=900, legend=dict(orientation="h", y=1.08, font=dict(size=15)),
+        template='plotly_white',
+        margin=dict(l=70, r=70, t=70, b=60),
+        font=dict(size=14)
     )
-    fig.update_xaxes(title_text="Week", row=2, col=1)
-    fig.update_yaxes(title_text="Staff Count", row=1, col=1)
-    fig.update_yaxes(title_text="Patients Admitted", row=2, col=1)
+    fig.update_xaxes(title_text="Week", row=2, col=1, title_font=dict(size=17), tickfont=dict(size=15))
+    fig.update_yaxes(title_text="Staff Count", row=1, col=1, title_font=dict(size=17), tickfont=dict(size=15))
+    fig.update_yaxes(title_text="Patients Admitted", row=2, col=1, title_font=dict(size=17), tickfont=dict(size=15))
 
     return fig
 

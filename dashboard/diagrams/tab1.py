@@ -321,8 +321,10 @@ def register_callbacks(app, df):
             ))
 
             fig.update_layout(
-                title=SERVICE_LABELS.get(s, s),
-                height=450
+                title=dict(text=SERVICE_LABELS.get(s, s), font=dict(size=22)),
+                height=520,
+                margin=dict(l=70, r=70, t=110, b=60),
+                font=dict(size=15)
             )
 
             figs.append(
@@ -455,14 +457,17 @@ def register_callbacks(app, df):
                 )
 
             fig.update_layout(
-                title=SERVICE_LABELS.get(s, s),
+                title=dict(text=SERVICE_LABELS.get(s, s), font=dict(size=22)),
                 dragmode='select',
                 clickmode='event+select',
-                xaxis=dict(title=x_axis_label),
-                yaxis=dict(title='Value'),
+                xaxis=dict(title=dict(text=x_axis_label, font=dict(size=17)), tickfont=dict(size=15)),
+                yaxis=dict(title=dict(text='Value', font=dict(size=17)), tickfont=dict(size=15)),
                 uirevision=f"line-chart-{s}",
                 selectionrevision="keep-selection",
-                shapes=shapes    
+                shapes=shapes,
+                margin=dict(l=70, r=70, t=80, b=60),
+                font=dict(size=15),
+                legend=dict(font=dict(size=15))
             )
 
             charts.append(dcc.Graph(
