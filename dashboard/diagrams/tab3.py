@@ -189,11 +189,11 @@ def register_callbacks(app, df):
             ret_events = []
             ret_weeks = [min_week, max_week]
             ret_cluster_focus = None
-            ret_selected_data = None
+            ret_selected_data = {'points': []}
             
         elif triggered_id == 'd5-clear-selection-btn':
             bubble_selected = None
-            ret_selected_data = None
+            ret_selected_data = {'points': []}
         
         # ----------------------------------------------------
         # 1. Global Clustering (On Full Data)
@@ -315,6 +315,11 @@ def register_callbacks(app, df):
                 if cluster_val not in visible_clusters:
                     trace.visible = 'legendonly'
             
+            # Change uirevision when clearing selection to force reset
+            ui_revision = 'bubble-chart'
+            if triggered_id in ['d5-clear-selection-btn', 'd5-reset-filters-btn']:
+                ui_revision = f'bubble-chart-{reset_clicks}-{clear_clicks}'
+            
             fig_bubble.update_layout(
                 height=920,
                 title=dict(text="<b>State Space:</b> Stress vs Quality", font=dict(size=22)),
@@ -326,11 +331,11 @@ def register_callbacks(app, df):
                 xaxis=dict(title=dict(text="Occupancy Rate (%)", font=dict(size=17)), tickfont=dict(size=15)),
                 yaxis=dict(title=dict(text="Patient Satisfaction", font=dict(size=17)), tickfont=dict(size=15)),
                 legend=dict(font=dict(size=15)),
-                uirevision='bubble-chart'
+                uirevision=ui_revision
             )
             
             fig_bubble.update_traces(
-                unselected=dict(marker=dict(opacity=0.15)),
+                unselected=dict(marker=dict(opacity=0.12)),
                 selected=dict(marker=dict(opacity=1.0))
             )
         
@@ -426,7 +431,7 @@ def register_callbacks(app, df):
             for trace in fig_drill.data:
                 if hasattr(trace, 'customdata') and trace.customdata is not None:
                     row_ids = [int(cd[0]) for cd in trace.customdata]
-                    opacities = [1.0 if df_drill_all.iloc[rid]['is_highlighted'] else 0.1 for rid in row_ids]
+                    opacities = [1.0 if df_drill_all.iloc[rid]['is_highlighted'] else 0.07 for rid in row_ids]
                     trace.marker.opacity = opacities
             
             fig_drill.update_layout(
