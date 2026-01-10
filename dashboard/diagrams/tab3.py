@@ -399,7 +399,12 @@ def register_callbacks(app, df):
             yaxis_title=dict(text="Service", font=dict(size=17)),
             showlegend=False,
             xaxis=dict(range=[min_week, max_week], tickfont=dict(size=15)),
-            yaxis=dict(tickfont=dict(size=15)),
+            yaxis=dict(
+                tickfont=dict(size=15),
+                tickmode='array',
+                tickvals=list(SERVICE_LABELS.keys()),
+                ticktext=list(SERVICE_LABELS.values())
+            ),
             margin=dict(l=70, r=70, t=80, b=60),
             font=dict(size=14)
         )
@@ -428,11 +433,11 @@ def register_callbacks(app, df):
         else:
             df_drill_all['is_highlighted'] = df_drill_all.index.isin(df_highlight.index)
             
-            # Check if any highlighted data exists in the drilldown
+            # Check if any highlighted data exists in the drill-down
             if not df_drill_all['is_highlighted'].any():
                 fig_drill = go.Figure()
                 fig_drill.add_annotation(
-                    text="No selected data is present in the Drilldown",
+                    text="No selected data is present in the Drill-down",
                     xref="paper", yref="paper",
                     x=0.5, y=0.5,
                     showarrow=False,
