@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler
 
 # Adjust paths if necessary
 SERVICES_PATH = "../data/services_weekly.csv"
