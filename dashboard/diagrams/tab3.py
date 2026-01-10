@@ -409,66 +409,97 @@ def register_callbacks(app, df):
         
         if df_drill_all.empty:
             fig_drill = go.Figure()
+            fig_drill.add_annotation(
+                text="No high-occupancy data in current filters",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5,
+                showarrow=False,
+                font=dict(size=18, color="#666"),
+                xanchor='center', yanchor='middle'
+            )
             fig_drill.update_layout(
-                title=dict(text="No high-occupancy data in current filters", font=dict(size=20)),
+                title=dict(text="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall", font=dict(size=22)),
                 height=700,
                 margin=dict(l=70, r=70, t=80, b=60),
-                font=dict(size=14)
+                font=dict(size=14),
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False)
             )
         else:
             df_drill_all['is_highlighted'] = df_drill_all.index.isin(df_highlight.index)
-            df_drill_all['row_id'] = range(len(df_drill_all))
             
-            fig_drill = px.scatter(
-                df_drill_all,
-                x='patient_satisfaction',
-                y='occupancy_rate', 
-                color='cluster_label',
-                facet_row='service', 
-                color_discrete_map=color_map,
-                category_orders={"cluster_label": [str(i) for i in range(k)]},
-                title="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall",
-                hover_data=['week', 'patients_admitted', 'staff_morale'],
-                custom_data=['row_id']
-            )
-            
-            # Apply opacity based on highlight status and hide traces for hidden clusters
-            for trace in fig_drill.data:
-                cluster_val = trace.name
+            # Check if any highlighted data exists in the drilldown
+            if not df_drill_all['is_highlighted'].any():
+                fig_drill = go.Figure()
+                fig_drill.add_annotation(
+                    text="No selected data is present in the Drilldown",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5,
+                    showarrow=False,
+                    font=dict(size=18, color="#666"),
+                    xanchor='center', yanchor='middle'
+                )
+                fig_drill.update_layout(
+                    title=dict(text="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall", font=dict(size=22)),
+                    height=700,
+                    margin=dict(l=70, r=70, t=80, b=60),
+                    font=dict(size=14),
+                    xaxis=dict(visible=False),
+                    yaxis=dict(visible=False)
+                )
+            else:
+                df_drill_all['row_id'] = range(len(df_drill_all))
                 
-                # Hide trace if cluster is hidden in legend
-                if cluster_val not in visible_clusters:
-                    trace.visible = False
-                elif hasattr(trace, 'customdata') and trace.customdata is not None:
-                    row_ids = [int(cd[0]) for cd in trace.customdata]
-                    opacities = [1.0 if df_drill_all.iloc[rid]['is_highlighted'] else 0.07 for rid in row_ids]
-                    trace.marker.opacity = opacities
-            
-            fig_drill.update_layout(
-                height=700, 
-                title=dict(text="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall", font=dict(size=22)),
-                xaxis_title=dict(text="Patient Satisfaction", font=dict(size=17)),
-                showlegend=False,
-                margin=dict(l=170, r=100, t=80, b=60),
-                font=dict(size=14),
-                xaxis=dict(tickfont=dict(size=15)),
-            )
-            fig_drill.update_yaxes(title="", row=1)
-            fig_drill.update_yaxes(title="", row=2)
-            fig_drill.update_yaxes(
-                title="Occupancy Rate (%)",
-                tickfont=dict(size=17),
-                title_standoff=25,
-                row=3,
-            )
-            fig_drill.update_yaxes(title="", row=4)
-            fig_drill.update_traces(marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')))
-            
-            fig_drill.for_each_annotation(lambda a: a.update(
-                text=SERVICE_LABELS.get(a.text.split("=")[-1], a.text.split("=")[-1].replace('_', ' ').title()),
-                x=-0.02,
-                xanchor='right',
-                textangle=-90
+                fig_drill = px.scatter(
+                    df_drill_all,
+                    x='patient_satisfaction',
+                    y='occupancy_rate', 
+                    color='cluster_label',
+                    facet_row='service', 
+                    color_discrete_map=color_map,
+                    category_orders={"cluster_label": [str(i) for i in range(k)]},
+                    title="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall",
+                    hover_data=['week', 'patients_admitted', 'staff_morale'],
+                    custom_data=['row_id']
+                )
+                
+                # Apply opacity based on highlight status and hide traces for hidden clusters
+                for trace in fig_drill.data:
+                    cluster_val = trace.name
+                    
+                    # Hide trace if cluster is hidden in legend
+                    if cluster_val not in visible_clusters:
+                        trace.visible = False
+                    elif hasattr(trace, 'customdata') and trace.customdata is not None:
+                        row_ids = [int(cd[0]) for cd in trace.customdata]
+                        opacities = [1.0 if df_drill_all.iloc[rid]['is_highlighted'] else 0.07 for rid in row_ids]
+                        trace.marker.opacity = opacities
+                
+                fig_drill.update_layout(
+                    height=700, 
+                    title=dict(text="<b>Drill-down:</b> Anatomy of the 95-100% Occupancy Wall", font=dict(size=22)),
+                    xaxis_title=dict(text="Patient Satisfaction", font=dict(size=17)),
+                    showlegend=False,
+                    margin=dict(l=170, r=100, t=80, b=60),
+                    font=dict(size=14),
+                    xaxis=dict(tickfont=dict(size=15)),
+                )
+                fig_drill.update_yaxes(title="", row=1)
+                fig_drill.update_yaxes(title="", row=2)
+                fig_drill.update_yaxes(
+                    title="Occupancy Rate (%)",
+                    tickfont=dict(size=17),
+                    title_standoff=25,
+                    row=3,
+                )
+                fig_drill.update_yaxes(title="", row=4)
+                fig_drill.update_traces(marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')))
+                
+                fig_drill.for_each_annotation(lambda a: a.update(
+                    text=SERVICE_LABELS.get(a.text.split("=")[-1], a.text.split("=")[-1].replace('_', ' ').title()),
+                    x=-0.02,
+                    xanchor='right',
+                    textangle=-90
             ))
 
         return fig_bubble, fig_dna, fig_timeline, fig_drill, cluster_options, \

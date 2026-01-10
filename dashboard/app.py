@@ -16,7 +16,7 @@ server = app.server
 app.layout = html.Div([
     html.Div([
         html.H1("Hospital Operations Dashboard"),
-        html.P("Integrated Analytics for Capacity, Seasonality, Staffing, and Strategy.")
+        html.P("Integrated Analytics for Monitoring Hospital Operations and Management")
     ], className="header"),
 
     dcc.Tabs([
