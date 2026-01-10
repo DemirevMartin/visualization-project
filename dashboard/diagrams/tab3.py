@@ -7,6 +7,14 @@ from sklearn.preprocessing import StandardScaler
 
 from colors import CLUSTER_COLORS
 
+# Service labels mapping
+SERVICE_LABELS = {
+    'emergency': 'Emergency',
+    'ICU': 'ICU', 
+    'surgery': 'Surgery',
+    'general_medicine': 'General Medicine'
+}
+
 # ------------------------
 # Layout
 # ------------------------
@@ -102,7 +110,7 @@ def create_layout(df):
         html.Div([
             # LEFT COLUMN: Bubble Chart
             html.Div([
-                dcc.Graph(id='d5-bubble-chart', style={'height': '850px'})
+                dcc.Graph(id='d5-bubble-chart', style={'height': '920px'})
             ], style={'width': '58%', 'display': 'inline-block', 'verticalAlign': 'top'}),
             
             # RIGHT COLUMN: Heatmap and Timeline
@@ -308,15 +316,15 @@ def register_callbacks(app, df):
                     trace.visible = 'legendonly'
             
             fig_bubble.update_layout(
-                height=850,
+                height=920,
                 title=dict(text="<b>State Space:</b> Stress vs Quality", font=dict(size=22)),
                 legend_title=dict(text="Stress Level", font=dict(size=16)),
                 margin=dict(l=70, r=70, t=80, b=60),
                 clickmode='event+select',
                 dragmode='select',
                 font=dict(size=14),
-                xaxis=dict(title=dict(font=dict(size=17)), tickfont=dict(size=15)),
-                yaxis=dict(title=dict(font=dict(size=17)), tickfont=dict(size=15)),
+                xaxis=dict(title=dict(text="Occupancy Rate (%)", font=dict(size=17)), tickfont=dict(size=15)),
+                yaxis=dict(title=dict(text="Patient Satisfaction", font=dict(size=17)), tickfont=dict(size=15)),
                 legend=dict(font=dict(size=15)),
                 uirevision='bubble-chart'
             )
@@ -404,7 +412,7 @@ def register_callbacks(app, df):
             fig_drill = px.scatter(
                 df_drill_all,
                 x='patient_satisfaction',
-                y=pd.Series([1]*len(df_drill_all)), 
+                y='occupancy_rate', 
                 color='cluster_label',
                 facet_row='service', 
                 color_discrete_map=color_map,
@@ -426,17 +434,24 @@ def register_callbacks(app, df):
                 title=dict(text="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall", font=dict(size=22)),
                 xaxis_title=dict(text="Patient Satisfaction", font=dict(size=17)),
                 showlegend=False,
-                yaxis={'visible': False, 'showticklabels': False},
-                margin=dict(l=140, r=70, t=80, b=60),
+                margin=dict(l=170, r=100, t=80, b=60),
                 font=dict(size=14),
-                xaxis=dict(tickfont=dict(size=15))
+                xaxis=dict(tickfont=dict(size=15)),
             )
-            fig_drill.update_yaxes(matches=None, showticklabels=False, visible=False)
+            fig_drill.update_yaxes(title="", row=1)
+            fig_drill.update_yaxes(
+                title="Occupancy Rate (%)",
+                tickfont=dict(size=17),
+                title_standoff=25,
+                row=2
+            )
+            fig_drill.update_yaxes(title="", tickfont=dict(size=15), row=3)
+            fig_drill.update_yaxes(title="", tickfont=dict(size=15), row=4)
             fig_drill.update_traces(marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')))
             
             fig_drill.for_each_annotation(lambda a: a.update(
-                text=a.text.split("=")[-1],
-                x=-0.01,
+                text=SERVICE_LABELS.get(a.text.split("=")[-1], a.text.split("=")[-1].replace('_', ' ').title()),
+                x=-0.02,
                 xanchor='right',
                 textangle=-90
             ))
