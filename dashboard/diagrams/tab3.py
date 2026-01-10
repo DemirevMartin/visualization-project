@@ -354,57 +354,72 @@ def register_callbacks(app, df):
         )
 
         # --- FIGURE 3: TIMELINE HEATMAP ---
-        if df_highlight.empty:
-            fig_timeline = go.Figure()
-            fig_timeline.update_layout(
-                title=dict(text="No data selected", font=dict(size=20)),
-                margin=dict(l=70, r=70, t=80, b=60),
-                font=dict(size=14)
-            )
-        else:
-            fig_timeline = px.scatter(
-                df_highlight, x='week', y='service', color='cluster_label', symbol='cluster_label',
-                color_discrete_map=color_map,
-                category_orders={"cluster_label": [str(i) for i in range(k)]},
-                title="<b>Timeline:</b> Crisis Patterns",
-                hover_data=['occupancy_rate']
-            )
-            fig_timeline.update_traces(marker=dict(size=14, symbol='square'))
-            fig_timeline.update_layout(
-                height=450,
-                title=dict(text="<b>Timeline:</b> Crisis Patterns", font=dict(size=22)),
-                xaxis_title=dict(text="Week", font=dict(size=17)), 
-                yaxis_title=dict(text="Service", font=dict(size=17)),
-                showlegend=False,
-                xaxis=dict(range=[min_week, max_week], tickfont=dict(size=15)),
-                yaxis=dict(tickfont=dict(size=15)),
-                margin=dict(l=70, r=70, t=80, b=60),
-                font=dict(size=14)
-            )
+        df_view['is_highlighted'] = highlight_mask
+        
+        fig_timeline = px.scatter(
+            df_view, x='week', y='service', color='cluster_label', symbol='cluster_label',
+            color_discrete_map=color_map,
+            category_orders={"cluster_label": [str(i) for i in range(k)]},
+            title="<b>Timeline:</b> Crisis Patterns",
+            hover_data=['occupancy_rate'],
+            custom_data=['is_highlighted']
+        )
+        
+        # Apply opacity based on highlight status
+        for trace in fig_timeline.data:
+            cluster_val = trace.name
+            cluster_df = df_view[df_view['cluster_label'] == cluster_val]
+            if not cluster_df.empty:
+                opacities = cluster_df['is_highlighted'].map({True: 1.0, False: 0.1}).values
+                trace.marker.opacity = opacities
+        
+        fig_timeline.update_traces(marker=dict(size=14, symbol='square'))
+        fig_timeline.update_layout(
+            height=450,
+            title=dict(text="<b>Timeline:</b> Crisis Patterns", font=dict(size=22)),
+            xaxis_title=dict(text="Week", font=dict(size=17)), 
+            yaxis_title=dict(text="Service", font=dict(size=17)),
+            showlegend=False,
+            xaxis=dict(range=[min_week, max_week], tickfont=dict(size=15)),
+            yaxis=dict(tickfont=dict(size=15)),
+            margin=dict(l=70, r=70, t=80, b=60),
+            font=dict(size=14)
+        )
 
         # --- FIGURE 4: CAPACITY DRILL-DOWN ---
-        df_drill = df_highlight[df_highlight['occupancy_rate'] >= 95].copy()
+        df_drill_all = df_view[df_view['occupancy_rate'] >= 95].copy()
         
-        if df_drill.empty:
+        if df_drill_all.empty:
             fig_drill = go.Figure()
             fig_drill.update_layout(
-                title=dict(text="No high-occupancy data in selection", font=dict(size=20)),
+                title=dict(text="No high-occupancy data in current filters", font=dict(size=20)),
                 height=700,
                 margin=dict(l=70, r=70, t=80, b=60),
                 font=dict(size=14)
             )
         else:
+            df_drill_all['is_highlighted'] = df_drill_all.index.isin(df_highlight.index)
+            df_drill_all['row_id'] = range(len(df_drill_all))
+            
             fig_drill = px.scatter(
-                df_drill,
+                df_drill_all,
                 x='patient_satisfaction',
-                y=pd.Series([1]*len(df_drill)), 
+                y=pd.Series([1]*len(df_drill_all)), 
                 color='cluster_label',
                 facet_row='service', 
                 color_discrete_map=color_map,
                 category_orders={"cluster_label": [str(i) for i in range(k)]},
                 title="<b>Drill-down:</b> Anatomy of the '100% Occupancy' Wall",
                 hover_data=['week', 'patients_admitted', 'staff_morale'],
+                custom_data=['row_id']
             )
+            
+            # Apply opacity based on highlight status for each trace
+            for trace in fig_drill.data:
+                if hasattr(trace, 'customdata') and trace.customdata is not None:
+                    row_ids = [int(cd[0]) for cd in trace.customdata]
+                    opacities = [1.0 if df_drill_all.iloc[rid]['is_highlighted'] else 0.1 for rid in row_ids]
+                    trace.marker.opacity = opacities
             
             fig_drill.update_layout(
                 height=700, 
