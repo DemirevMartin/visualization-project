@@ -378,13 +378,18 @@ def register_callbacks(app, df):
             custom_data=['is_highlighted']
         )
         
-        # Apply opacity based on highlight status
+        # Apply opacity based on highlight status and hide traces for hidden clusters
         for trace in fig_timeline.data:
             cluster_val = trace.name
-            cluster_df = df_view[df_view['cluster_label'] == cluster_val]
-            if not cluster_df.empty:
-                opacities = cluster_df['is_highlighted'].map({True: 1.0, False: 0.1}).values
-                trace.marker.opacity = opacities
+            
+            # Hide trace if cluster is hidden in legend
+            if cluster_val not in visible_clusters:
+                trace.visible = False
+            else:
+                cluster_df = df_view[df_view['cluster_label'] == cluster_val]
+                if not cluster_df.empty:
+                    opacities = cluster_df['is_highlighted'].map({True: 1.0, False: 0.1}).values
+                    trace.marker.opacity = opacities
         
         fig_timeline.update_traces(marker=dict(size=14, symbol='square'))
         fig_timeline.update_layout(
@@ -427,9 +432,14 @@ def register_callbacks(app, df):
                 custom_data=['row_id']
             )
             
-            # Apply opacity based on highlight status for each trace
+            # Apply opacity based on highlight status and hide traces for hidden clusters
             for trace in fig_drill.data:
-                if hasattr(trace, 'customdata') and trace.customdata is not None:
+                cluster_val = trace.name
+                
+                # Hide trace if cluster is hidden in legend
+                if cluster_val not in visible_clusters:
+                    trace.visible = False
+                elif hasattr(trace, 'customdata') and trace.customdata is not None:
                     row_ids = [int(cd[0]) for cd in trace.customdata]
                     opacities = [1.0 if df_drill_all.iloc[rid]['is_highlighted'] else 0.07 for rid in row_ids]
                     trace.marker.opacity = opacities
