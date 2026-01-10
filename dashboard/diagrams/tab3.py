@@ -439,14 +439,14 @@ def register_callbacks(app, df):
                 xaxis=dict(tickfont=dict(size=15)),
             )
             fig_drill.update_yaxes(title="", row=1)
+            fig_drill.update_yaxes(title="", row=2)
             fig_drill.update_yaxes(
                 title="Occupancy Rate (%)",
                 tickfont=dict(size=17),
                 title_standoff=25,
-                row=2
+                row=3,
             )
-            fig_drill.update_yaxes(title="", tickfont=dict(size=15), row=3)
-            fig_drill.update_yaxes(title="", tickfont=dict(size=15), row=4)
+            fig_drill.update_yaxes(title="", row=4)
             fig_drill.update_traces(marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')))
             
             fig_drill.for_each_annotation(lambda a: a.update(
