@@ -15,6 +15,15 @@ SERVICE_LABELS = {
     'general_medicine': 'General Medicine'
 }
 
+
+FIXED_SERVICES = list(SERVICE_LABELS.keys())
+EVENT_LABELS = {
+    'flu': 'Flu',
+    'donation': 'Donation',
+    'strike': 'Strike',
+    'none': 'None'
+}
+
 # ------------------------
 # Layout
 # ------------------------
@@ -67,22 +76,23 @@ def create_layout(df):
             # Row 2: Filters (Service, Event, Week)
             html.Div([
                 html.Div([
-                    html.Label("Filter Services:", style={'fontWeight': 'bold'}),
+                    html.Label("Services:", style={'fontWeight': 'bold'}),
                     dcc.Dropdown(
                         id='d5-service-filter',
                         className='service-filter',
-                        options=[{'label': s, 'value': s} for s in available_services],
+                        options=[{"label": html.Span(SERVICE_LABELS.get(s, s), className=f"service-pill service-{s}"), "value": s} 
+                                 for s in available_services],
                         multi=True,
                         placeholder="All Services"
                     ),
                 ], style={'width': '30%', 'display': 'inline-block', 'verticalAlign': 'top'}),
 
                 html.Div([
-                    html.Label("Filter Events:", style={'fontWeight': 'bold'}),
+                    html.Label("Events:", style={'fontWeight': 'bold'}),
                     dcc.Dropdown(
                         id='d5-event-filter',
                         className='event-filter',
-                        options=[{'label': e, 'value': e} for e in available_events],
+                        options=[{"label": EVENT_LABELS.get(e, e), "value": e} for e in available_events],
                         multi=True,
                         placeholder="All Events"
                     ),
@@ -301,7 +311,7 @@ def register_callbacks(app, df):
                 y='patient_satisfaction',
                 size='patients_admitted',
                 color='cluster_label',
-                symbol='cluster_label',
+                #symbol='cluster_label',
                 color_discrete_map=color_map,
                 category_orders={"cluster_label": [str(i) for i in range(k)]},
                 title="<b>State Space:</b> Stress vs Quality",
@@ -370,7 +380,8 @@ def register_callbacks(app, df):
         df_view['is_highlighted'] = highlight_mask
         
         fig_timeline = px.scatter(
-            df_view, x='week', y='service', color='cluster_label', symbol='cluster_label',
+            df_view, x='week', y='service', color='cluster_label', 
+            #symbol='cluster_label',
             color_discrete_map=color_map,
             category_orders={"cluster_label": [str(i) for i in range(k)]},
             title="<b>Timeline:</b> Crisis Patterns",
