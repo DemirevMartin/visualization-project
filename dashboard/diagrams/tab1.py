@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 from dash.exceptions import PreventUpdate
 
+from colors import COLORS_DICT
+
 # ------------------------
 # Constants & Helpers
 # ------------------------
@@ -36,6 +38,13 @@ METRIC_LABELS = [
     'Patient Satisfaction',
     'Staff Morale',
     'Patients Refused'
+]
+
+METRIC_COLORS = [
+    COLORS_DICT['patients_admitted'],
+    COLORS_DICT['patient_satisfaction'],
+    COLORS_DICT['staff_morale'],
+    COLORS_DICT['patients_refused']
 ]
 
 def aggregate_line(df_in, agg, services, events):
@@ -307,8 +316,10 @@ def register_callbacks(app, df):
             ))
 
             fig.update_layout(
-                title=SERVICE_LABELS.get(s, s),
-                height=450
+                title=dict(text=SERVICE_LABELS.get(s, s), font=dict(size=22)),
+                height=520,
+                margin=dict(l=70, r=70, t=110, b=60),
+                font=dict(size=15)
             )
 
             figs.append(
@@ -386,13 +397,13 @@ def register_callbacks(app, df):
                 .reindex(sub[time_col])
             )
 
-            for m, label in zip(METRICS, METRIC_LABELS):
+            for idx, (m, label) in enumerate(zip(METRICS, METRIC_LABELS)):
                 sel = label in selected
                 pcp_mask = np.zeros(len(sub), dtype=bool)
                 
                 # Check PCP ranges
-                for idx, v in pcp_ranges.items():
-                    if pcp_dim_to_metric[idx] == m and v:
+                for dim_idx, v in pcp_ranges.items():
+                    if pcp_dim_to_metric[dim_idx] == m and v:
                         ranges = v if isinstance(v[0], (list, tuple)) else [v]
                         mask_part = np.zeros(len(sub), dtype=bool)
                         for lo, hi in ranges:
@@ -415,8 +426,9 @@ def register_callbacks(app, df):
                         "Value: %{y}<extra></extra>"
                     ),
                     opacity=1.0 if (not is_brushed or sel) else 0.15,
-                    line=dict(width=4 if sel else 2),
+                    line=dict(color=METRIC_COLORS[idx], width=4 if sel else 2),
                     marker=dict(
+                        color=METRIC_COLORS[idx],
                         size=np.where(pcp_mask, 12, 4)
                     )
                 ))
@@ -440,14 +452,17 @@ def register_callbacks(app, df):
                 )
 
             fig.update_layout(
-                title=SERVICE_LABELS.get(s, s),
+                title=dict(text=SERVICE_LABELS.get(s, s), font=dict(size=22)),
                 dragmode='select',
                 clickmode='event+select',
-                xaxis=dict(title=x_axis_label),
-                yaxis=dict(title='Value'),
+                xaxis=dict(title=dict(text=x_axis_label, font=dict(size=17)), tickfont=dict(size=15)),
+                yaxis=dict(title=dict(text='Value', font=dict(size=17)), tickfont=dict(size=15)),
                 uirevision=f"line-chart-{s}",
                 selectionrevision="keep-selection",
-                shapes=shapes    
+                shapes=shapes,
+                margin=dict(l=70, r=70, t=80, b=60),
+                font=dict(size=15),
+                legend=dict(font=dict(size=15))
             )
 
             charts.append(dcc.Graph(
@@ -481,4 +496,3 @@ def register_callbacks(app, df):
         
         # Only reset selections/stores
         return res_stores + [dash.no_update, dash.no_update, dash.no_update]
-    
