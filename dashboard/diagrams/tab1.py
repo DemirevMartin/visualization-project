@@ -320,9 +320,14 @@ def register_callbacks(app, df):
             fig = go.Figure(go.Parcoords(
                 line=dict(
                     color=pcp_color,
-                    cmin=0,
+                    cmin=0.0,
                     cmax=1.5,
-                    colorscale=COLORSCALE,
+                    colorscale=[
+                        [0.0, '#c6dbef'],   # Sufficient (dim)
+                        [0.33, '#1f77b4'],  # Sufficient (selected)
+                        [0.66, '#f2b6b6'],  # Shortage (dim)
+                        [1.0, '#d62728']    # Shortage (selected)
+                    ],
                     showscale=True,
                     colorbar=dict(
                         title="Availability",
@@ -515,6 +520,7 @@ def register_callbacks(app, df):
                                 "fontSize": "22px",
                                 "fontWeight": "600",
                                 "marginBottom": "4px",
+                                "marginTop": "20px"
                             },
                         ),
                         html.Div(
@@ -558,4 +564,4 @@ def register_callbacks(app, df):
         
         # Only reset selections/stores
         return res_stores + [dash.no_update, dash.no_update, dash.no_update]
-    
+
