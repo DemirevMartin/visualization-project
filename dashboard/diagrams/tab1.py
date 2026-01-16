@@ -10,6 +10,13 @@ from colors import COLORS_DICT
 # ------------------------
 # Constants & Helpers
 # ------------------------
+SERVICE_COLORS = {
+    'emergency': COLORS_DICT['emergency'],
+    'ICU': COLORS_DICT['ICU'],
+    'surgery': COLORS_DICT['surgery'],
+    'general_medicine': COLORS_DICT['general_medicine']
+}
+
 SERVICE_LABELS = {
     'emergency': 'Emergency',
     'general_medicine': 'General Medicine',
@@ -40,12 +47,22 @@ METRIC_LABELS = [
     'Patients Refused'
 ]
 
+# Colorscale for PCP
+COLORSCALE = [
+    [0.0, COLORS_DICT['sufficient']],
+    [0.5, COLORS_DICT['sufficient']],
+    [0.5, COLORS_DICT['shortage']],
+    [1.0, COLORS_DICT['shortage']]
+]
+
 METRIC_COLORS = [
     COLORS_DICT['patients_admitted'],
     COLORS_DICT['patient_satisfaction'],
     COLORS_DICT['staff_morale'],
     COLORS_DICT['patients_refused']
 ]
+
+# Metric colors for line charts
 
 def aggregate_line(df_in, agg, services, events):
     dff = df_in[df_in['service'].isin(services)].copy()
@@ -109,7 +126,7 @@ def create_layout(df):
 
             html.Div([
                 html.Div([
-                    html.Label("Filter Events:", style={'fontWeight': 'bold'}),
+                    html.Label("Events:", style={'fontWeight': 'bold'}),
                     dcc.Dropdown(
                         id='d1-event-filter',
                         className='event-filter',
@@ -123,14 +140,20 @@ def create_layout(df):
                 ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top'}),
 
                 html.Div([
-                    html.Label("Filter Services:", style={'fontWeight': 'bold'}),
+                    html.Label("Services:", style={'fontWeight': 'bold'}),
                     dcc.Dropdown(
                         id='d1-service-filter',
                         className='service-filter',
-                        options=[
-                            {'label': SERVICE_LABELS[s], 'value': s}
-                            for s in FIXED_SERVICES
-                        ],
+                    options=[
+                        {
+                            "label": html.Span(
+                                SERVICE_LABELS[s],
+                                className=f"service-pill service-{s}"
+                            ),
+                            "value": s
+                        }
+                        for s in FIXED_SERVICES
+                    ],
                         value=FIXED_SERVICES,
                         multi=True,
                         placeholder="Filter services"
@@ -286,7 +309,7 @@ def register_callbacks(app, df):
                 dict(label='Refused', values=sub['patients_refused'])
             ]
 
-            # ---- APPLY INTEGRATED BRUSHING (NEW, minimal)
+            # ---- brushing
             for k, v in (pcp_brush or {}).items():
                 # k looks like: "dimensions[1].constraintrange"
                 idx = int(k.split('[')[1].split(']')[0])
@@ -297,14 +320,9 @@ def register_callbacks(app, df):
             fig = go.Figure(go.Parcoords(
                 line=dict(
                     color=pcp_color,
-                    cmin=0.0,
+                    cmin=0,
                     cmax=1.5,
-                    colorscale=[
-                        [0.0, '#c6dbef'],   # Sufficient (dim)
-                        [0.33, '#1f77b4'],  # Sufficient (selected)
-                        [0.66, '#f2b6b6'],  # Shortage (dim)
-                        [1.0, '#d62728']    # Shortage (selected)
-                    ],
+                    colorscale=COLORSCALE,
                     showscale=True,
                     colorbar=dict(
                         title="Availability",
@@ -316,25 +334,47 @@ def register_callbacks(app, df):
             ))
 
             fig.update_layout(
-                title=dict(text=SERVICE_LABELS.get(s, s), font=dict(size=22)),
                 height=520,
-                margin=dict(l=70, r=70, t=110, b=60),
+                margin=dict(l=70, r=70, t=40, b=60),
                 font=dict(size=15)
             )
 
+            service_color = SERVICE_COLORS.get(s, "#7f8c8d")
+
             figs.append(
-                dcc.Graph(
-                    id={'type': 'pcp-chart', 'index': s},  # ← REQUIRED for linking
-                    figure=fig
+                html.Div(
+                    [
+                        html.Div(
+                            SERVICE_LABELS.get(s, s),
+                            style={
+                                "fontSize": "22px",
+                                "fontWeight": "600",
+                                "marginBottom": "4px",
+                            },
+                        ),
+                        html.Div(
+                            style={
+                                "height": "4px",
+                                "backgroundColor": service_color,
+                                "marginBottom": "8px",
+                            },
+                        ),
+                        dcc.Graph(
+                            id={'type': 'pcp-chart', 'index': s},
+                            figure=fig
+                        )
+                    ]
                 )
             )
 
         return html.Div(
             figs,
             style={
-                'display': 'grid',
-                'gridTemplateColumns': 'repeat(2, 1fr)',
-                'gap': '12px'
+                "display": "grid",
+                "gridTemplateColumns": "repeat(2, 1fr)",
+                "gridAutoRows": "580px",
+                "alignItems": "start",
+                "gap": "12px"
             }
         )
 
@@ -452,7 +492,6 @@ def register_callbacks(app, df):
                 )
 
             fig.update_layout(
-                title=dict(text=SERVICE_LABELS.get(s, s), font=dict(size=22)),
                 dragmode='select',
                 clickmode='event+select',
                 xaxis=dict(title=dict(text=x_axis_label, font=dict(size=17)), tickfont=dict(size=15)),
@@ -460,15 +499,38 @@ def register_callbacks(app, df):
                 uirevision=f"line-chart-{s}",
                 selectionrevision="keep-selection",
                 shapes=shapes,
-                margin=dict(l=70, r=70, t=80, b=60),
+                margin=dict(l=70, r=70, t=40, b=60),
                 font=dict(size=15),
                 legend=dict(font=dict(size=15))
             )
 
-            charts.append(dcc.Graph(
-                id={'type': 'd2-chart', 'index': s},
-                figure=fig
-            ))
+            service_color = SERVICE_COLORS.get(s, "#7f8c8d")
+
+            charts.append(
+                html.Div(
+                    [
+                        html.Div(
+                            SERVICE_LABELS.get(s, s),
+                            style={
+                                "fontSize": "22px",
+                                "fontWeight": "600",
+                                "marginBottom": "4px",
+                            },
+                        ),
+                        html.Div(
+                            style={
+                                "height": "4px",
+                                "backgroundColor": service_color,
+                                "marginBottom": "8px",
+                            },
+                        ),
+                        dcc.Graph(
+                            id={'type': 'd2-chart', 'index': s},
+                            figure=fig
+                        )
+                    ]
+                )
+            )
 
         return charts
 
@@ -496,3 +558,4 @@ def register_callbacks(app, df):
         
         # Only reset selections/stores
         return res_stores + [dash.no_update, dash.no_update, dash.no_update]
+    

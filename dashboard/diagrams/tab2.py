@@ -234,34 +234,76 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
 
         for i, role in enumerate(roles):
             fig.add_trace(
-                go.Bar(x=df_agg['week'], y=df_agg[role], name=role_labels[role], marker_color=ROLE_COLORS[i]),
-                row=1, col=1
-            )
-
-        fig.add_trace(
-            go.Scatter(x=df_agg['week'], y=df_agg['patients_admitted'],
-                      name='Patients Admitted', mode='lines+markers', line=dict(color=COLORS_DICT['patients_admitted'], width=3)),
-            row=2, col=1
-        )
-        title_suffix = " + ".join([s.capitalize() for s in selected_services])
-
-    else:
-        colors = px.colors.qualitative.Set2
-        for i, srv in enumerate(selected_services):
-            df_srv = df[df['service'] == srv].sort_values('week')
-            # Sum roles to get total staff
-            staff_total = df_srv['doctor'] + df_srv['nurse'] + df_srv['nursing_assistant']
-
+                    go.Bar(
+                            x=df_agg['week'],
+                            y=df_agg[role],
+                            name=role_labels[role],
+                            marker_color=ROLE_COLORS[i],
+                            hovertemplate=(
+                                "<b>%{fullData.name}</b><br>"
+                                "Week: %{x}<br>"
+                                "Staff count: %{y}<extra></extra>"
+                            )),
+                        row=1, col=1),
+        
             fig.add_trace(
-                go.Bar(x=df_srv['week'], y=staff_total, name=srv.capitalize(), marker_color=colors[i % len(colors)]),
-                row=1, col=1
-            )
-            fig.add_trace(
-                go.Scatter(x=df_srv['week'], y=df_srv['patients_admitted'],
-                          name=f"{srv.capitalize()} Patients", mode='lines+markers'),
+                go.Scatter(
+                    x=df_agg['week'],
+                    y=df_agg['patients_admitted'],
+                    name='Patients Admitted',
+                    mode='lines+markers',
+                    line=dict(color=COLORS_DICT['patients_admitted'], width=3),
+                    hovertemplate=(
+                        "<b>Patients Admitted</b><br>"
+                        "Week: %{x}<br>"
+                        "Patients admitted: %{y}<extra></extra>"
+                    )
+                ),
                 row=2, col=1
             )
-        title_suffix = " vs ".join([s.capitalize() for s in selected_services])
+
+    else:
+        for srv in selected_services:
+            df_srv = df[df['service'] == srv].sort_values('week')
+            staff_total = df_srv['doctor'] + df_srv['nurse'] + df_srv['nursing_assistant']
+
+            service_color = SERVICE_COLORS.get(srv, "#7f8c8d")
+
+            fig.add_trace(
+                go.Bar(
+                    x=df_srv['week'],
+                    y=staff_total,
+                    name=SERVICE_LABELS.get(srv, srv),
+                    legendgroup=srv,
+                    showlegend=True,
+                    marker_color=service_color,
+                    hovertemplate=(
+                        f"<b>{SERVICE_LABELS.get(srv, srv)}</b><br>"
+                        "Week: %{x}<br>"
+                        "Total staff: %{y}<extra></extra>"
+                    )
+                ),
+                row=1, col=1
+            )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=df_srv['week'],
+                    y=df_srv['patients_admitted'],
+                    name=SERVICE_LABELS.get(srv, srv),
+                    legendgroup=srv,
+                    showlegend=False,
+                    mode='lines+markers',
+                    line=dict(color=service_color, width=3),
+                    marker=dict(color=service_color),
+                    hovertemplate=(
+                        f"<b>{SERVICE_LABELS.get(srv, srv)}</b><br>"
+                        "Week: %{x}<br>"
+                        "Patients admitted: %{y}<extra></extra>"
+                    )
+                ),
+                row=2, col=1
+            )
 
     if hoverData and 'points' in hoverData:
         week = hoverData['points'][0]['x']
@@ -288,7 +330,16 @@ def create_layout(df):
     # Preprocessing or checking if columns like 'doctor', 'nurse', 'nursing_assistant' exist
     # data loading is handled by loader.py, so df should be ready
     all_services = sorted(df['service'].unique())
-    service_options = [{'label': SERVICE_LABELS.get(s, s.capitalize()), 'value': s} for s in all_services]
+    service_options = [
+        {
+            "label": html.Span(
+                SERVICE_LABELS.get(s, s.capitalize()),
+                className=f"service-pill service-{s}"
+            ),
+            "value": s
+        }
+        for s in all_services
+    ]
     event_options = [{'label': e.capitalize(), 'value': e} for e in sorted(df['event'].astype(str).unique()) if e != 'nan']
     min_week = df['week'].min()
     max_week = df['week'].max()
@@ -302,7 +353,7 @@ def create_layout(df):
             html.Div([
                 html.Div([
                     html.Label("Services:", style={'fontWeight': 'bold'}),
-                    dcc.Dropdown(id='filter-services', options=service_options, value=all_services, multi=True),
+                    dcc.Dropdown(id='filter-services', className = 'service-filter', options=service_options, value=all_services, multi=True),
                 ], style={'flex': '1', 'padding': '10px', 'minWidth': '200px'}),
                 
                 html.Div([
@@ -338,7 +389,7 @@ def create_layout(df):
         # ========== View 1 ==========
         html.Div([
             html.H3("Staff Performance & Satisfaction Analysis", 
-                    style={'color': '#2c3e50', 'borderBottom': '3px solid #3498db', 'paddingBottom': '10px'}),
+                    style={'color': '#2c3e50', 'borderBottom': '3px solid #bdc3c7', 'paddingBottom': '10px'}),
             
             dcc.Store(id='view1-store', data=None),
             html.Div(id='view1-status'),
@@ -349,7 +400,7 @@ def create_layout(df):
         # ========== View 2 ==========
         html.Div([
             html.H3("Staff Allocation Timeline", 
-                    style={'color': '#2c3e50', 'borderBottom': '3px solid #2ecc71', 'paddingBottom': '10px'}),
+                    style={'color': '#2c3e50', 'borderBottom': '3px solid #bdc3c7', 'paddingBottom': '10px'}),
             
             dcc.Graph(id='view2-graph', style={'height': '800px'}, config={'displayModeBar': True}),
         ], style={'padding': '20px', 'backgroundColor': '#ffffff', 
