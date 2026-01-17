@@ -154,6 +154,7 @@ def register_callbacks(app, df):
                          reset_clicks, clear_clicks, restyle_data, current_figure):
         
         triggered_id = ctx.triggered_id
+        trigger_prop_id = ctx.triggered[0]['prop_id'] if ctx.triggered else None
         
         # Default return values for controls
         ret_services = no_update
@@ -236,7 +237,7 @@ def register_callbacks(app, df):
                         if str(i) in visible_clusters:
                             visible_clusters.remove(str(i))
                 
-                if triggered_id == 'd5-bubble-chart' and restyle_data:
+                if trigger_prop_id == 'd5-bubble-chart.restyleData' and restyle_data:
                     update_dict = restyle_data[0]
                     trace_indices = restyle_data[1]
                     
@@ -269,7 +270,7 @@ def register_callbacks(app, df):
         # ----------------------------------------------------
         
         # --- FIGURE 1: BUBBLE CHART ---
-        if triggered_id == 'd5-bubble-chart' and restyle_data:
+        if trigger_prop_id and 'd5-bubble-chart' in trigger_prop_id:
             fig_bubble = no_update
         else:
             fig_bubble = px.scatter(
@@ -485,4 +486,3 @@ def register_callbacks(app, df):
 
         return fig_bubble, fig_dna, fig_timeline, fig_drill, \
                ret_services, ret_events, ret_weeks, ret_selected_data
-    
