@@ -265,6 +265,8 @@ def register_callbacks(app, df):
             for k, v in changes.items():
                 # Example key: "dimensions[1].constraintrange"
                 if "constraintrange" in k:
+                    stored[k] = v[-1]   # keep only the most recent range
+                else:
                     stored[k] = v
 
         return stored
