@@ -11,3 +11,29 @@ body {
     text-align: center;
     margin-bottom: 20px;
 }
+
+.service-filter .Select--multi .Select-value {
+    border-radius: 6px;
+    font-weight: 600;
+    border: none;
+}
+
+.service-emergency {
+    background-color: #e0770d;
+    color: white;
+}
+
+.service-ICU {
+    background-color: #07dbf7;
+    color: white;
+}
+
+.service-surgery {
+    background-color: #f1f707;
+    color: white;
+}
+
+.service-general_medicine {
+    background-color: #1fd368;
+    color: white;
+}
