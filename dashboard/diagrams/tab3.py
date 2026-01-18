@@ -35,12 +35,12 @@ def create_layout(df):
         html.H1("Strategic Operational Clustering", 
                 style={'textAlign': 'center', 'fontFamily': 'Arial, sans-serif'}),
         
-        html.P("Identify operational patterns. Cluster 0 = Lowest Stress, Cluster K = Highest Stress.",
+        html.P("Identify operational patterns.\nThe Cluster Numbers can be perceived as Stress Levels: Cluster 0 = Lowest Stress, Cluster K = Highest Stress.",
                style={'textAlign': 'center', 'color': '#555'}),
 
         # --- Control Panel ---
         html.Div([
-            # Row 1: K-Means & Cluster Focus
+            # Row 1: K-Means
             html.Div([
                 html.Div([
                     html.Label("Number of Clusters (k):", style={'fontWeight': 'bold'}),
@@ -50,39 +50,28 @@ def create_layout(df):
                         marks={i: str(i) for i in range(2, 6)},
                         step=1
                     ),
-                ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top'}),
-                
-                html.Div([
-                    html.Label("Focus on Cluster:", style={'fontWeight': 'bold'}),
-                    dcc.Dropdown(
-                        id='d5-cluster-filter',
-                        className='cluster-filter',
-                        options=[], # Populated by callback
-                        placeholder="Select a cluster to highlight...",
-                        clearable=True
-                    ),
-                ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top', 'paddingLeft': '4%'}),
+                ], style={'width': '100%', 'display': 'inline-block', 'verticalAlign': 'top'}),
             ], style={'marginBottom': '20px'}),
 
             # Row 2: Filters (Service, Event, Week)
             html.Div([
                 html.Div([
-                    html.Label("Filter Services:", style={'fontWeight': 'bold'}),
+                    html.Label("Services:", style={'fontWeight': 'bold'}),
                     dcc.Dropdown(
                         id='d5-service-filter',
                         className='service-filter',
-                        options=[{'label': s, 'value': s} for s in available_services],
+                        options=[{'label': html.Span(SERVICE_LABELS.get(s, s), className=f"service-pill service-{s}"), 'value': s} for s in available_services],
                         multi=True,
                         placeholder="All Services"
                     ),
                 ], style={'width': '30%', 'display': 'inline-block', 'verticalAlign': 'top'}),
 
                 html.Div([
-                    html.Label("Filter Events:", style={'fontWeight': 'bold'}),
+                    html.Label("Events:", style={'fontWeight': 'bold'}),
                     dcc.Dropdown(
                         id='d5-event-filter',
                         className='event-filter',
-                        options=[{'label': e, 'value': e} for e in available_events],
+                        options=[{'label': e.capitalize(), 'value': e} for e in available_events],
                         multi=True,
                         placeholder="All Events"
                     ),
@@ -147,33 +136,30 @@ def register_callbacks(app, df):
          Output('d5-heatmap-dna', 'figure'),
          Output('d5-heatmap-timeline', 'figure'),
          Output('d5-capacity-drilldown', 'figure'),
-         Output('d5-cluster-filter', 'options'),
          Output('d5-service-filter', 'value'),
          Output('d5-event-filter', 'value'),
          Output('d5-week-slider', 'value'),
-         Output('d5-cluster-filter', 'value'),
          Output('d5-bubble-chart', 'selectedData')],
         [Input('d5-k-slider', 'value'),
          Input('d5-service-filter', 'value'),
          Input('d5-event-filter', 'value'),
          Input('d5-week-slider', 'value'),
-         Input('d5-cluster-filter', 'value'),
          Input('d5-bubble-chart', 'selectedData'),
          Input('d5-reset-filters-btn', 'n_clicks'),
          Input('d5-clear-selection-btn', 'n_clicks'),
          Input('d5-bubble-chart', 'restyleData')],
         [State('d5-bubble-chart', 'figure')]
     )
-    def update_dashboard(k, selected_services, selected_events, week_range, focus_cluster, bubble_selected, 
+    def update_dashboard(k, selected_services, selected_events, week_range, bubble_selected, 
                          reset_clicks, clear_clicks, restyle_data, current_figure):
         
         triggered_id = ctx.triggered_id
+        trigger_prop_id = ctx.triggered[0]['prop_id'] if ctx.triggered else None
         
         # Default return values for controls
         ret_services = no_update
         ret_events = no_update
         ret_weeks = no_update
-        ret_cluster_focus = no_update
         ret_selected_data = no_update
         
         # Logic to override inputs if Reset/Clear triggered
@@ -181,14 +167,12 @@ def register_callbacks(app, df):
             selected_services = []
             selected_events = []
             week_range = [min_week, max_week]
-            focus_cluster = None
             bubble_selected = None
             
             # Set return values to update UI
             ret_services = []
             ret_events = []
             ret_weeks = [min_week, max_week]
-            ret_cluster_focus = None
             ret_selected_data = {'points': []}
             
         elif triggered_id == 'd5-clear-selection-btn':
@@ -221,9 +205,6 @@ def register_callbacks(app, df):
         colors = CLUSTER_COLORS[:k]
         color_map = {str(i): c for i, c in enumerate(colors) if i < len(colors)}
         
-        # Update Cluster Dropdown Options
-        cluster_options = [{'label': f"Cluster {i}", 'value': str(i)} for i in range(k)]
-
         # ----------------------------------------------------
         # 2. Apply User Filters (Service, Event, Week)
         # ----------------------------------------------------
@@ -256,7 +237,7 @@ def register_callbacks(app, df):
                         if str(i) in visible_clusters:
                             visible_clusters.remove(str(i))
                 
-                if triggered_id == 'd5-bubble-chart' and restyle_data:
+                if trigger_prop_id == 'd5-bubble-chart.restyleData' and restyle_data:
                     update_dict = restyle_data[0]
                     trace_indices = restyle_data[1]
                     
@@ -275,9 +256,6 @@ def register_callbacks(app, df):
         # Create Highlight Mask
         highlight_mask = pd.Series([True] * len(df_view), index=df_view.index)
         
-        if focus_cluster is not None:
-            highlight_mask &= (df_view['cluster_label'] == focus_cluster)
-            
         if bubble_selected and bubble_selected.get('points'):
             selected_indices = [p['customdata'][0] for p in bubble_selected['points'] if 'customdata' in p]
             if selected_indices:
@@ -292,7 +270,7 @@ def register_callbacks(app, df):
         # ----------------------------------------------------
         
         # --- FIGURE 1: BUBBLE CHART ---
-        if triggered_id == 'd5-bubble-chart' and restyle_data:
+        if trigger_prop_id and 'd5-bubble-chart' in trigger_prop_id:
             fig_bubble = no_update
         else:
             fig_bubble = px.scatter(
@@ -301,7 +279,6 @@ def register_callbacks(app, df):
                 y='patient_satisfaction',
                 size='patients_admitted',
                 color='cluster_label',
-                symbol='cluster_label',
                 color_discrete_map=color_map,
                 category_orders={"cluster_label": [str(i) for i in range(k)]},
                 title="<b>State Space:</b> Stress vs Quality",
@@ -323,7 +300,7 @@ def register_callbacks(app, df):
             fig_bubble.update_layout(
                 height=920,
                 title=dict(text="<b>State Space:</b> Stress vs Quality", font=dict(size=22)),
-                legend_title=dict(text="Stress Level", font=dict(size=16)),
+                legend_title=dict(text="Cluster", font=dict(size=16)),
                 margin=dict(l=70, r=70, t=80, b=60),
                 clickmode='event+select',
                 dragmode='select',
@@ -370,7 +347,7 @@ def register_callbacks(app, df):
         df_view['is_highlighted'] = highlight_mask
         
         fig_timeline = px.scatter(
-            df_view, x='week', y='service', color='cluster_label', symbol='cluster_label',
+            df_view, x='week', y='service', color='cluster_label',
             color_discrete_map=color_map,
             category_orders={"cluster_label": [str(i) for i in range(k)]},
             title="<b>Timeline:</b> Crisis Patterns",
@@ -507,6 +484,5 @@ def register_callbacks(app, df):
                     textangle=-90
             ))
 
-        return fig_bubble, fig_dna, fig_timeline, fig_drill, cluster_options, \
-               ret_services, ret_events, ret_weeks, ret_cluster_focus, ret_selected_data
-    
+        return fig_bubble, fig_dna, fig_timeline, fig_drill, \
+               ret_services, ret_events, ret_weeks, ret_selected_data

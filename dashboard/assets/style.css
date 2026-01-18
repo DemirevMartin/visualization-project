@@ -12,36 +12,28 @@ body {
     margin-bottom: 20px;
 }
 
-.card {
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    padding: 20px;
-    margin-bottom: 20px;
-    border: 1px solid #e1e4e8;
+.service-filter .Select--multi .Select-value {
+    border-radius: 6px;
+    font-weight: 600;
+    border: none;
 }
 
-.control-panel {
-    background-color: #eef2f7;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 15px;
-    border: 1px solid #dce1e6;
+.service-emergency {
+    background-color: #e0770d;
+    color: white;
 }
 
-.control-label {
-    font-weight: bold;
-    color: #34495e;
-    margin-bottom: 5px;
-    display: block;
+.service-ICU {
+    background-color: #07dbf7;
+    color: white;
 }
 
-/* Tab Styles */
-.custom-tabs {
-    margin-top: -20px;
+.service-surgery {
+    background-color: #f1f707;
+    color: white;
 }
-.custom-tab {
-    padding: 12px !important;
-    font-size: 16px;
-    font-weight: bold;
+
+.service-general_medicine {
+    background-color: #1fd368;
+    color: white;
 }
