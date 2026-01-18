@@ -24,3 +24,8 @@ If python is not recognized use python3 instead
 ```
 > pip install -r requirements.txt
 ```
+4. To run the dashboard
+```
+>cd dashboard
+>python app.py
+```
