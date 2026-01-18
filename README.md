@@ -12,7 +12,7 @@ If python is not recognized use python3 instead
 2. Activate the virtual environment
 - In Windows: 
 ```
-> .venv\Scripts\activate
+> .\.venv\Scripts\activate
 ```
 
 - In Unix system:
