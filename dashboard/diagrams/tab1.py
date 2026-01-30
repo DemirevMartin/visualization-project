@@ -64,7 +64,14 @@ METRIC_COLORS = [
 
 # Metric colors for line charts
 
+# ------------------------
+# Data Aggregation Function
+# ------------------------
 def aggregate_line(df_in, agg, services, events):
+    """
+    Aggregate weekly data to different time granularities (weekly/monthly/quarterly).
+    Filters by selected services and events, then computes metrics for visualization.
+    """
     dff = df_in[df_in['service'].isin(services)].copy()
     if events:
         dff = dff[dff['event'].isin(events)]
@@ -80,6 +87,7 @@ def aggregate_line(df_in, agg, services, events):
         available_beds=('available_beds', 'sum')
     ).reset_index()
 
+    # Calculate bed availability status: Shortage when requests exceed available beds
     g['availability_status'] = np.where(
         g['patients_request'].fillna(0) > g['available_beds'].fillna(0),
         'Shortage', 'Sufficient'
@@ -199,7 +207,10 @@ def register_callbacks(app, df):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors='coerce')
 
-    # Metric brushing
+    # ------------------------
+    # Callback: Metric Brushing (Line Chart Interaction)
+    # Clicking a metric line toggles its selection state
+    # ------------------------
     @app.callback(
         Output('d1-global-metric-brush', 'data'),
         Input({'type': 'd2-chart', 'index': ALL}, 'clickData'),
@@ -207,46 +218,65 @@ def register_callbacks(app, df):
         prevent_initial_call=True
     )
     def update_metric_brush(click_list, stored):
+        # Initialize storage as empty list if not already a list
         if not isinstance(stored, list):
             stored = []
 
+        # Iterate through click events from all line charts
         for click in click_list or []:
+            # Verify click event has valid point data
             if click and 'points' in click:
+                # Get the curve number (metric index) from the clicked point
                 idx = click['points'][0].get('curveNumber')
+                # Check if valid metric index
                 if idx is not None and idx < len(METRIC_LABELS):
                     metric = METRIC_LABELS[idx]
+                    # Toggle metric selection: remove if already selected, add if not
                     if metric in stored:
                         stored.remove(metric)
                     else:
                         stored.append(metric)
-                    break
+                    break  # Process only the first click event
         return stored
 
-    # Rectangle time brushing
+    # ------------------------
+    # Callback: Rectangle Time Brushing
+    # Capture time range selection via rectangular selection on line charts
+    # ------------------------
     @app.callback(
         Output('d1-time-selection', 'data'),
         Input({'type': 'd2-chart', 'index': ALL}, 'selectedData'),
         prevent_initial_call=True
     )
     def capture_rectangle(selected_list):
+        # Check if any selection was made; if not, don't update
         if not selected_list or all(sel is None for sel in selected_list):
             raise PreventUpdate
 
         weeks, service = set(), None
+        # Extract all selected points from all line charts
         for sel in selected_list:
+            # Verify selection data exists
             if sel and 'points' in sel:
+                # Iterate through each selected point
                 for p in sel['points']:
+                    # Extract week/month/quarter from x-axis (time dimension)
                     if 'x' in p:
                         weeks.add(int(p['x']))
+                    # Extract service identifier from customdata
                     if 'customdata' in p:
                         service = p['customdata']
 
+        # Only return selection if both weeks and service are captured
         if not weeks or not service:
             raise PreventUpdate
 
         return {'service': service, 'weeks': sorted(weeks)}
 
-    # PCP Brush
+    # ------------------------
+    # Callback: Parallel Coordinates Plot (PCP) Brushing
+    # Store constraint ranges when user brushes dimensions in PCP
+    # ------------------------
     @app.callback(
         Output('d1-pcp-brush-store', 'data'),
         Input({'type': 'pcp-chart', 'index': ALL}, 'restyleData'),
@@ -254,24 +284,33 @@ def register_callbacks(app, df):
         prevent_initial_call=True
     )
     def capture_pcp_brush(restyle_list, stored):
+        # Initialize storage dictionary if empty
         if not stored:
             stored = {}
 
+        # Process restyle events from parallel coordinates charts
         for restyle in restyle_list or []:
+            # Skip empty restyle events
             if not restyle:
                 continue
 
             changes = restyle[0]
+            # Store constraint ranges for each modified dimension
             for k, v in changes.items():
-                # Example key: "dimensions[1].constraintrange"
+                # Key format example: "dimensions[1].constraintrange"
                 if "constraintrange" in k:
-                    stored[k] = v[-1]   # keep only the most recent range
+                    # Keep only the most recent range value for this dimension
+                    stored[k] = v[-1]
                 else:
+                    # Store other restyle properties as-is
                     stored[k] = v
 
         return stored
 
-    # Update D1 (PCP)
+    # ------------------------
+    # Callback: Update Parallel Coordinates Plots (D1)
+    # Generates one PCP per service, showing metrics with bed availability coloring
+    # ------------------------
     @app.callback(
         Output('d1-container', 'children'),
         Input('d1-time-granularity', 'value'),
@@ -291,19 +330,23 @@ def register_callbacks(app, df):
         else:
             pcp_mask = np.ones(len(g), dtype=bool)
         
-        figs = []
+        figs = []  # Accumulate PCP figures for each service
 
+        # Create one PCP chart for each selected service
         for s in services:
+            # Filter aggregated data to current service
             sub = g[g['service'] == s]
+            # Create mask to highlight time-selected data points in PCP
             if selected_weeks:
                 pcp_mask = sub[time_col].isin(selected_weeks)
             else:
-                pcp_mask = np.ones(len(sub), dtype=bool)
+                pcp_mask = np.ones(len(sub), dtype=bool)  # All points highlighted if no time selection
 
+            # Skip if no data for this service
             if sub.empty:
                 continue
 
-            # ---- PCP dimensions (EXACTLY same metrics as before)
+            # Build PCP dimensions for the four key metrics
             dimensions = [
                 dict(label='Satisfaction', values=sub['patient_satisfaction']),
                 dict(label='Staff Morale', values=sub['staff_morale']),
@@ -311,12 +354,13 @@ def register_callbacks(app, df):
                 dict(label='Refused', values=sub['patients_refused'])
             ]
 
-            # ---- brushing
+            # Apply stored brush constraints to PCP dimensions
             for k, v in (pcp_brush or {}).items():
-                # k looks like: "dimensions[1].constraintrange"
+                # Parse dimension index from key like "dimensions[1].constraintrange"
                 idx = int(k.split('[')[1].split(']')[0])
                 dimensions[idx]['constraintrange'] = v
             
+            # Color encoding: base color by availability status, brightness by time selection
             pcp_color = sub['status_id'].astype(float) + np.where(pcp_mask, 0.5, 0.0)
             
             fig = go.Figure(go.Parcoords(
@@ -385,7 +429,11 @@ def register_callbacks(app, df):
             }
         )
 
-    # Update D2 (Small Multiples)
+    # ------------------------
+    # Callback: Update Small Multiples Line Charts (D2)
+    # One line chart per service showing all metrics over time
+    # Supports metric highlighting, time selection bands, and PCP brushing
+    # ------------------------
     @app.callback(
         Output('d2-container', 'children'),
         Input('d1-time-granularity', 'value'),
@@ -396,6 +444,7 @@ def register_callbacks(app, df):
         State('d1-time-selection', 'data')
     )
     def update_d2(agg, events, services, brushed, pcp_brush, selection):
+        # Map PCP dimension indices to metric column names
         pcp_dim_to_metric = {
             0: 'patient_satisfaction',
             1: 'staff_morale',
@@ -403,16 +452,20 @@ def register_callbacks(app, df):
             3: 'patients_refused'
         }
 
+        # Extract PCP brush ranges to highlight matching points in line charts
         pcp_ranges = {}
+        # Convert stored PCP constraints to a dimension-indexed dictionary
         for k, v in (pcp_brush or {}).items():
+            # Extract dimension index from constraint key
             idx = int(k.split('[')[1].split(']')[0])
+            # Only store if this dimension maps to a metric we display
             if idx in pcp_dim_to_metric:
                 pcp_ranges[idx] = v
 
         services = services or FIXED_SERVICES
         g, time_col = aggregate_line(df, agg, services, events)
         
-        # Rectangle time bounds
+        # Determine time range for shaded selection band on charts
         if selection and selection.get('weeks'):
             x0 = min(selection['weeks'])
             x1 = max(selection['weeks'])
@@ -433,7 +486,7 @@ def register_callbacks(app, df):
             sub = g[g['service'] == s]
             fig = go.Figure()
             
-            # Event series for hover
+            # Extract event data for hover tooltips
             event_series = (
                 df[
                     (df['service'] == s) &
@@ -444,15 +497,20 @@ def register_callbacks(app, df):
                 .reindex(sub[time_col])
             )
 
+            # Plot each of the four metrics with conditional highlighting based on brushing
             for idx, (m, label) in enumerate(zip(METRICS, METRIC_LABELS)):
+                # Check if this metric was selected via click on line chart
                 sel = label in selected
                 pcp_mask = np.zeros(len(sub), dtype=bool)
                 
-                # Check PCP ranges
+                # Check if PCP brush constraints apply to this metric
                 for dim_idx, v in pcp_ranges.items():
+                    # If dimension constraint matches this metric
                     if pcp_dim_to_metric[dim_idx] == m and v:
+                        # Normalize to list of ranges (may be single range or multiple)
                         ranges = v if isinstance(v[0], (list, tuple)) else [v]
                         mask_part = np.zeros(len(sub), dtype=bool)
+                        # Create mask for points within any of the constraint ranges
                         for lo, hi in ranges:
                             mask_part |= (sub[m] >= lo) & (sub[m] <= hi)
                         pcp_mask = mask_part
@@ -555,15 +613,17 @@ def register_callbacks(app, df):
         prevent_initial_call=True
     )
     def handle_resets(btn_selection, btn_all):
+        # Determine which reset button was clicked
         triggered = ctx.triggered_id
         
-        # Both buttons reset the interactive stores
+        # Reset values for all interactive brushing stores (metric, time, PCP)
         res_stores = [[], None, {}]
         
+        # Check if full reset (all filters) was triggered
         if triggered == 'd1-reset-all-btn':
-            # Reset everything including filters
+            # Reset everything: stores + filters + granularity to initial state
             return res_stores + ['weekly', all_events_callback, FIXED_SERVICES]
         
-        # Only reset selections/stores
+        # Partial reset: clear interactive selections only, keep current filter settings
         return res_stores + [dash.no_update, dash.no_update, dash.no_update]
 

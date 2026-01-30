@@ -88,6 +88,7 @@ def create_layout(df):
                     ),
                 ], style={'width': '100%', 'display': 'block', 'marginTop': '20px'}),
             ]),
+            
             # Row 3: Reset
             html.Div([
                 html.Button("Reset Selection", id="d5-clear-selection-btn", n_clicks=0, style={'cursor':'pointer', 'padding': '5px 15px', 'marginRight': '10px'}),
@@ -131,6 +132,10 @@ def register_callbacks(app, df):
     min_week = df['week'].min()
     max_week = df['week'].max()
 
+    # ------------------------
+    # Main Callback: Update All Dashboard Components
+    # Performs K-means clustering, applies filters, and generates 4 coordinated visualizations
+    # ------------------------
     @app.callback(
         [Output('d5-bubble-chart', 'figure'),
          Output('d5-heatmap-dna', 'figure'),
@@ -181,6 +186,8 @@ def register_callbacks(app, df):
         
         # ----------------------------------------------------
         # 1. Global Clustering (On Full Data)
+        # Apply K-means clustering to the entire dataset based on 3 key features
+        # Clusters are then sorted by average occupancy to represent stress levels
         # ----------------------------------------------------
         df_viz = df.copy()
         
@@ -193,7 +200,8 @@ def register_callbacks(app, df):
         kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
         raw_clusters = kmeans.fit_predict(data_matrix)
         
-        # Sort Clusters by Occupancy
+        # Relabel clusters so that Cluster 0 = lowest stress, Cluster k-1 = highest stress
+        # Sorted by average occupancy rate per cluster
         df_temp = pd.DataFrame({'raw_cluster': raw_clusters, 'occupancy': df_viz['occupancy_rate']})
         cluster_stats = df_temp.groupby('raw_cluster')['occupancy'].mean().sort_values().reset_index()
         mapping = {row['raw_cluster']: i for i, row in cluster_stats.iterrows()}
@@ -207,15 +215,19 @@ def register_callbacks(app, df):
         
         # ----------------------------------------------------
         # 2. Apply User Filters (Service, Event, Week)
-        # ----------------------------------------------------
+        # Filter the clustered data based on dropdown and slider selections
+        # Start with all rows included, then apply filters with logical AND
         mask = pd.Series([True] * len(df_viz))
         
+        # Apply service filter if user selected specific services
         if selected_services:
             mask &= df_viz['service'].isin(selected_services)
         
+        # Apply event filter if user selected specific events
         if selected_events:
             mask &= df_viz['event'].astype(str).isin(selected_events)
             
+        # Apply week range filter from slider
         if week_range:
             mask &= (df_viz['week'] >= week_range[0]) & (df_viz['week'] <= week_range[1])
             
@@ -224,55 +236,77 @@ def register_callbacks(app, df):
 
         # ----------------------------------------------------
         # 3. Apply Interactive Filters (Selection, Focus, Legend)
+        # Handle bubble chart selections and legend toggles to highlight data
         # ----------------------------------------------------
         
-        # Determine Visible Clusters from Legend
+        # Determine which clusters are visible based on legend state (all visible by default)
         visible_clusters = set([str(i) for i in range(k)])
         
+        # Preserve legend visibility state from previous figure (unless k or reset changed)
         if current_figure and triggered_id != 'd5-k-slider' and triggered_id != 'd5-reset-filters-btn':
+            # Ensure figure structure matches current cluster count
             if len(current_figure['data']) == k:
+                # Check each trace to see if it was hidden in the legend
                 for i, trace in enumerate(current_figure['data']):
                     vis = trace.get('visible', True)
+                    # If cluster was hidden (marked as 'legendonly'), remove it from visible set
                     if vis == 'legendonly':
                         if str(i) in visible_clusters:
                             visible_clusters.remove(str(i))
                 
+                # Handle legend toggle events: when user clicks legend items to hide/show clusters
                 if trigger_prop_id == 'd5-bubble-chart.restyleData' and restyle_data:
+                    # restyle_data contains two elements: [update_dict, trace_indices]
+                    # update_dict has the new properties, trace_indices are the affected trace numbers
                     update_dict = restyle_data[0]
                     trace_indices = restyle_data[1]
                     
+                    # Check if the 'visible' property was changed (legend toggle)
                     if 'visible' in update_dict:
+                        # Extract the new visibility state (can be True, False, or 'legendonly')
                         new_vis = update_dict['visible']
+                        # Handle both list and scalar values
                         val = new_vis[0] if isinstance(new_vis, list) else new_vis
                         
+                        # Apply visibility change to each affected trace (cluster)
                         for idx in trace_indices:
                             cluster_id = str(idx)
+                            # 'legendonly' means the trace is hidden (user clicked legend to hide)
                             if val == 'legendonly':
                                 if cluster_id in visible_clusters:
                                     visible_clusters.remove(cluster_id)
+                            # Otherwise the trace is visible (user clicked to show or default state)
                             else:
                                 visible_clusters.add(cluster_id)
 
-        # Create Highlight Mask
+        # Create mask to determine which points should be highlighted across all visualizations
+        # Start with all points, then filter by selections and visibility
         highlight_mask = pd.Series([True] * len(df_view), index=df_view.index)
         
+        # If user brushed/selected points in bubble chart, restrict to only those indices
         if bubble_selected and bubble_selected.get('points'):
+            # Extract data indices from selected points
             selected_indices = [p['customdata'][0] for p in bubble_selected['points'] if 'customdata' in p]
+            # Filter mask to only selected indices
             if selected_indices:
                 highlight_mask &= df_view.index.isin(selected_indices)
-                
+        
+        # Also exclude points from clusters hidden via legend toggle
         highlight_mask &= df_view['cluster_label'].isin(visible_clusters)
 
         df_highlight = df_view[highlight_mask].copy()
 
         # ----------------------------------------------------
         # 4. Generate Figures
+        # Create four coordinated visualizations showing different aspects of the clusters
         # ----------------------------------------------------
         
-        # --- FIGURE 1: BUBBLE CHART ---
+        # --- FIGURE 1: BUBBLE CHART (State Space) ---
+        # Main scatter plot showing occupancy vs satisfaction, colored by cluster
         if trigger_prop_id and 'd5-bubble-chart' in trigger_prop_id:
             fig_bubble = no_update
         else:
+            # Create scatter plot with bubbles sized by admission count
             fig_bubble = px.scatter(
                 df_view,
                 x='occupancy_rate',
@@ -286,9 +320,10 @@ def register_callbacks(app, df):
                 custom_data=['index_col']
             )
             
+            # Apply legend visibility state to traces
             for trace in fig_bubble.data:
                 cluster_val = trace.name
-                    
+                # Hide traces for clusters that were toggled off in legend
                 if cluster_val not in visible_clusters:
                     trace.visible = 'legendonly'
             
@@ -317,6 +352,8 @@ def register_callbacks(app, df):
             )
         
         # --- FIGURE 2: CLUSTER DNA HEATMAP ---
+        # Shows normalized feature values (centroids) for each cluster
+        # Helps understand what characterizes each stress level
         df_scaled = pd.DataFrame(data_matrix, columns=cluster_features)
         df_scaled['cluster'] = df_viz['cluster']
         centroids = df_scaled.groupby('cluster')[cluster_features].mean()
@@ -344,6 +381,7 @@ def register_callbacks(app, df):
         )
 
         # --- FIGURE 3: TIMELINE HEATMAP ---
+        # Shows when each service experiences different stress levels (clusters) over time
         df_view['is_highlighted'] = highlight_mask
         
         fig_timeline = px.scatter(
@@ -359,11 +397,13 @@ def register_callbacks(app, df):
         for trace in fig_timeline.data:
             cluster_val = trace.name
             
-            # Hide trace if cluster is hidden in legend
+            # Hide trace completely if cluster is hidden in legend
             if cluster_val not in visible_clusters:
                 trace.visible = False
             else:
+                # Set individual point opacity based on highlight mask
                 cluster_df = df_view[df_view['cluster_label'] == cluster_val]
+                # Only apply opacity if cluster has data in current view
                 if not cluster_df.empty:
                     opacities = cluster_df['is_highlighted'].map({True: 1.0, False: 0.1}).values
                     trace.marker.opacity = opacities
@@ -387,9 +427,13 @@ def register_callbacks(app, df):
         )
 
         # --- FIGURE 4: CAPACITY DRILL-DOWN ---
+        # Detailed view of high-occupancy situations (≥95%) faceted by service
+        # Shows how satisfaction varies even at maximum capacity (≥95%)
         df_drill_all = df_view[df_view['occupancy_rate'] >= 95].copy()
         
+        # Handle case: no high-occupancy data matches current filters
         if df_drill_all.empty:
+            # Create empty figure with informative message
             fig_drill = go.Figure()
             fig_drill.add_annotation(
                 text="No high-occupancy data in current filters",
@@ -408,9 +452,10 @@ def register_callbacks(app, df):
                 yaxis=dict(visible=False)
             )
         else:
+            # Mark which high-occupancy records are highlighted based on bubble chart selection
             df_drill_all['is_highlighted'] = df_drill_all.index.isin(df_highlight.index)
             
-            # Check if any highlighted data exists in the drill-down
+            # Handle case: high-occupancy data exists but none is highlighted by user selection
             if not df_drill_all['is_highlighted'].any():
                 fig_drill = go.Figure()
                 fig_drill.add_annotation(

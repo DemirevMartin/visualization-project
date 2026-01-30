@@ -33,9 +33,15 @@ ROLE_COLORS = [
 # HELPER FUNCTIONS
 # ===========================
 def create_view1(df, selected_weeks=None, selected_services=None):
+    """
+    Create a 2x2 subplot dashboard showing staff performance and satisfaction.
+    Top row: scatter plots showing presence/workload vs satisfaction
+    Bottom row: bar chart of department performance and service overview bubble chart
+    """
     # Use a copy to avoid SettingWithCopy on the original df
     df = df.copy()
 
+    # Create selection masks for highlighting based on user interaction
     if selected_weeks is not None and len(selected_weeks) > 0:
         df['week_selected'] = df['week'].isin(selected_weeks)
     else:
@@ -46,6 +52,7 @@ def create_view1(df, selected_weeks=None, selected_services=None):
     else:
         df['service_selected'] = True
 
+    # Create 2x2 subplot layout with different chart types
     fig = make_subplots(
         rows=2, cols=2,
         subplot_titles=['Staff Presence vs Satisfaction', 'Workload Pressure vs Satisfaction',
@@ -54,15 +61,19 @@ def create_view1(df, selected_weeks=None, selected_services=None):
         vertical_spacing=0.18, horizontal_spacing=0.15
     )
 
-    # TOP-LEFT: Presence vs Satisfaction
+    # TOP-LEFT: Scatter plot showing correlation between staff presence and patient satisfaction
     for service, color in SERVICE_COLORS.items():
+        # Filter data for current service
         service_data = df[df['service'] == service].copy()
+        # Skip if no data for this service
         if len(service_data) == 0:
             continue
 
+        # Split data into selected and non-selected for dual opacity rendering
         selected = service_data[service_data['week_selected']]
         not_selected = service_data[~service_data['week_selected']]
 
+        # Plot non-selected points first with low opacity (background context)
         if len(not_selected) > 0:
             fig.add_trace(
                 go.Scatter(
@@ -76,6 +87,7 @@ def create_view1(df, selected_weeks=None, selected_services=None):
                 row=1, col=1
             )
         
+        # Plot selected points with full opacity (highlighted)
         if len(selected) > 0:
             fig.add_trace(
                 go.Scatter(
@@ -89,17 +101,23 @@ def create_view1(df, selected_weeks=None, selected_services=None):
                 row=1, col=1
             )
 
-    # TOP-RIGHT: Workload vs Satisfaction
+    # TOP-RIGHT: Workload vs Satisfaction scatter plot
+    # Shows relationship between patients per staff and patient satisfaction
     if 'patients_per_staff' in df.columns:
+        # Filter out extreme outliers (patients_per_staff >= 15) for better visualization
         workload_data = df[df['patients_per_staff'] < 15].copy()
+        
+        # Iterate through each service to create separate traces
         for service, color in SERVICE_COLORS.items():
             service_data = workload_data[workload_data['service'] == service]
             if len(service_data) == 0:
                 continue
             
+            # Split data into selected and non-selected based on week filter
             selected = service_data[service_data['week_selected']]
             not_selected = service_data[~service_data['week_selected']]
             
+            # Plot non-selected points with low opacity (background context)
             if len(not_selected) > 0:
                 fig.add_trace(
                     go.Scatter(
@@ -112,6 +130,7 @@ def create_view1(df, selected_weeks=None, selected_services=None):
                     row=1, col=2
                 )
             
+            # Plot selected points with full opacity and white border (highlighted)
             if len(selected) > 0:
                 fig.add_trace(
                     go.Scatter(
@@ -132,11 +151,14 @@ def create_view1(df, selected_weeks=None, selected_services=None):
          dept_avg['avg_satisfaction'] = dept_avg['patient_satisfaction']
          
     dept_avg.columns = ['service', 'service_satisfaction', 'patient_satisfaction']
+    # Sort services by satisfaction for better visual hierarchy
     dept_avg = dept_avg.sort_values('service_satisfaction', ascending=True)
     
+    # Create horizontal bar for each service, sorted by satisfaction
     for _, row in dept_avg.iterrows():
         service = row['service']
         color = SERVICE_COLORS.get(service, '#7f8c8d')
+        # Determine if this service is included in the user's filter selection
         is_selected = (selected_services is None or len(selected_services) == 0 or service in selected_services)
         service_label = SERVICE_LABELS.get(service, service.replace('_', ' ').title())
         
@@ -157,6 +179,7 @@ def create_view1(df, selected_weeks=None, selected_services=None):
         'presence_rate': 'mean', 'patient_satisfaction': 'mean', 'patients_per_staff': 'mean'
     }).reset_index()
 
+    # Create bubble for each service summarizing key metrics
     for _, row in service_summary.iterrows():
         service = row['service']
         color = SERVICE_COLORS.get(service, '#7f8c8d')
@@ -201,7 +224,11 @@ def create_view1(df, selected_weeks=None, selected_services=None):
     return fig
 
 def create_view2(df, view_mode, selected_services, selected_events, selected_weeks, hoverData):
-    """Temporal staff allocation view"""
+    """
+    Create temporal staff allocation view with two panels:
+    - Top: Staff allocation (stacked bar chart by role or grouped by service)
+    - Bottom: Patients admitted over time (line chart)
+    """
     
     if isinstance(selected_services, str):
         selected_services = [selected_services]
@@ -224,7 +251,7 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
     )
 
     if view_mode == 'role':
-        # Grouping
+        # Aggregate by week, showing total staff count per role across all services
         df_agg = df.groupby('week', as_index=False).agg({
             'doctor': 'sum', 'nurse': 'sum', 'nursing_assistant': 'sum', 'patients_admitted': 'sum'
         }).sort_values('week')
@@ -232,6 +259,7 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
         roles = ['doctor', 'nurse', 'nursing_assistant']
         role_labels = {'doctor': 'Doctor', 'nurse': 'Nurse', 'nursing_assistant': 'Nursing Assistant'}
 
+        # Create stacked bar chart with one series per role type
         for i, role in enumerate(roles):
             fig.add_trace(
                     go.Bar(
@@ -263,8 +291,11 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
             )
 
     else:
+        # Service-based view: show total staff and patients per service over time
         for srv in selected_services:
+            # Filter and sort data for current service by week
             df_srv = df[df['service'] == srv].sort_values('week')
+            # Sum all role types to get total staff count per week
             staff_total = df_srv['doctor'] + df_srv['nurse'] + df_srv['nursing_assistant']
 
             service_color = SERVICE_COLORS.get(srv, "#7f8c8d")
@@ -305,6 +336,7 @@ def create_view2(df, view_mode, selected_services, selected_events, selected_wee
                 row=2, col=1
             )
 
+    # Add vertical band to highlight hovered week across both panels
     if hoverData and 'points' in hoverData:
         week = hoverData['points'][0]['x']
         fig.add_vrect(x0=week - 0.5, x1=week + 0.5, fillcolor="rgba(200,200,200,0.3)", line_width=0, layer="below")
@@ -428,7 +460,10 @@ def register_callbacks(app, df):
     def reset_filters(n_clicks):
         return all_services, [min_week, max_week], None, 'role'
 
-    # CALLBACK: VIEW 1
+    # ------------------------
+    # CALLBACK: View 1 - Staff Performance Dashboard
+    # Handles filtering, click selection (week/service), and lasso/box selection
+    # ------------------------
     @app.callback(
         [Output('view1-graph', 'figure'), Output('view1-store', 'data')],
         [Input('filter-week-slider', 'value'), Input('filter-services', 'value'),
@@ -437,30 +472,47 @@ def register_callbacks(app, df):
         [State('view1-store', 'data')]
     )
     def update_view1(weeks, services, click_data, selected_data, reset_clicks, current_state):
+        # Initialize state object on first load to track week and service selections
         if current_state is None:
             current_state = {'selected_weeks': None, 'selected_services': None}
         
+        # Determine which input triggered this callback update
         triggered = ctx.triggered_id
         
+        # Handle reset button: clear all interactive selections
         if triggered == 'filter-reset':
             current_state = {'selected_weeks': None, 'selected_services': None}
+        
+        # When filter sliders/dropdowns change, clear interactive selections to show new filtered data
         elif triggered in ['filter-week-slider', 'filter-services']:
             current_state = {'selected_weeks': None, 'selected_services': None}
+        
+        # Handle single point click: toggle week or service selection
         elif triggered == 'view1-graph' and click_data:
+            # Verify click event has valid point data
             if 'points' in click_data and len(click_data['points']) > 0:
                 point = click_data['points'][0]
+                # Extract custom data (week or service identifier)
                 if 'customdata' in point and point['customdata']:
                     custom = point['customdata']
+                    # Try to parse as week number; if fails, treat as service name
                     try:
                         week = int(custom[0])
+                        # Toggle week selection: if already selected, deselect; otherwise select
                         current_state['selected_weeks'] = None if current_state['selected_weeks'] == [week] else [week]
                     except (ValueError, TypeError):
+                        # Fallback: treat as service name and toggle service selection
                         service = custom[0]
                         current_state['selected_services'] = None if current_state['selected_services'] == [service] else [service]
+        
+        # Handle lasso/box selection: capture multiple selected points (weeks)
         elif triggered == 'view1-graph' and selected_data:
+            # Extract weeks from all selected points in scatter plots
             if 'points' in selected_data:
+                # Filter to scatter plot traces (curveNumber < 16) and extract week values from customdata
                 weeks_list = [int(p['customdata'][0]) for p in selected_data['points'] 
                              if 'customdata' in p and p.get('curveNumber', 0) < 16]
+                # Store unique sorted weeks if any were selected, otherwise clear selection
                 current_state['selected_weeks'] = sorted(list(set(weeks_list))) if weeks_list else None
 
         if not services:
@@ -496,7 +548,10 @@ def register_callbacks(app, df):
         return html.Div(parts, style={'padding': '10px', 'backgroundColor': '#fff3cd', 'borderRadius': '5px', 
                                       'marginBottom': '10px', 'border': '1px solid #ffc107'})
 
-    # CALLBACK: VIEW 2
+    # ------------------------
+    # CALLBACK: View 2 - Temporal Staff Allocation
+    # Updates based on view mode (role/service) and highlights hovered week
+    # ------------------------
     @app.callback(
         Output('view2-graph', 'figure'),
         [Input('filter-view-mode', 'value'), 
